@@ -257,8 +257,17 @@ public class HttpChannel implements Runnable, HttpOutput.Interceptor
         _written=0;
     }
 
-    public void asyncReadFillInterested()
+    public void asyncReadInterested()
     {
+    }
+
+    public void blockingReadInterested()
+    {
+    }
+
+    public void blockingReadFailure(Throwable failure)
+    {
+        getRequest().getHttpInput().failed(failure);
     }
 
     @Override

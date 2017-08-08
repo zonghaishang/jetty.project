@@ -90,17 +90,17 @@ public class HttpInputTest
         _in = new HttpInput(new HttpChannelState(new HttpChannel(null, new HttpConfiguration(), null, null)
         {
             @Override
-            public void asyncReadFillInterested()
+            public void asyncReadInterested()
             {
-                _history.add("asyncReadFillInterested");
+                _history.add("asyncReadInterested");
             }
         })
         {
             @Override
-            public void onReadUnready()
+            public boolean onReadUnready()
             {
                 _history.add("unready");
-                super.onReadUnready();
+                return super.onReadUnready();
             }
 
             @Override

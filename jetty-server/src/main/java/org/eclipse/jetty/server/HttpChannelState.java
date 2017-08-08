@@ -479,7 +479,7 @@ public class HttpChannelState
         }
 
         if (read_interested)
-            _channel.asyncReadFillInterested();
+            _channel.asyncReadInterested();
 
         return action;
     }
@@ -974,12 +974,13 @@ public class HttpChannelState
     /* ------------------------------------------------------------ */
     /** Called to signal async read isReady() has returned false.
      * This indicates that there is no content available to be consumed
-     * and that once the channel enteres the ASYNC_WAIT state it will
-     * register for read interest by calling {@link HttpChannel#asyncReadFillInterested()}
+     * and that once the channel enters the ASYNC_WAIT state it will
+     * register for read interest by calling {@link HttpChannel#asyncReadInterested()}
      * either from this method or from a subsequent call to {@link #unhandle()}.
      */
-    public void onReadUnready()
+    public boolean onReadUnready()
     {
+        boolean result=false;
         boolean interested=false;
         try(Locker.Lock lock= _locker.lock())
         {
@@ -989,16 +990,21 @@ public class HttpChannelState
                 _asyncReadPossible=false; // Assumes this has been checked in isReady() with lock held
                 if (_state==State.ASYNC_WAIT)
                 {
-                    interested=true;
+                    result=interested=true;
                     _asyncRead=Interest.REGISTERED;
                 }
                 else
+                {
+                    result=true;
                     _asyncRead=Interest.NEEDED;
+                }
             }
         }
 
         if (interested)
-            _channel.asyncReadFillInterested();
+            _channel.asyncReadInterested();
+
+        return result;
     }
 
     /* ------------------------------------------------------------ */

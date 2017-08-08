@@ -19,7 +19,6 @@
 package org.eclipse.jetty.server;
 
 import java.io.IOException;
-import java.io.InterruptedIOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -63,6 +62,7 @@ public class HttpInput extends ServletInputStream implements Runnable
     private long _contentArrived;
     private long _contentConsumed;
     private long _blockUntil;
+    private boolean _readInterested;
 
     public HttpInput(HttpChannelState state)
     {
@@ -382,6 +382,9 @@ public class HttpInput extends ServletInputStream implements Runnable
     {
         try
         {
+            _readInterested = true;
+            _channelState.getHttpChannel().blockingReadInterested();
+
             long timeout = 0;
             if (_blockUntil != 0)
             {
@@ -403,9 +406,9 @@ public class HttpInput extends ServletInputStream implements Runnable
             if (_blockUntil != 0 && TimeUnit.NANOSECONDS.toMillis(_blockUntil - System.nanoTime()) <= 0)
                 throw new TimeoutException(String.format("Blocking timeout %d ms", getBlockingTimeout()));
         }
-        catch (Throwable e)
+        catch (Throwable x)
         {
-            throw (IOException)new InterruptedIOException().initCause(e);
+            _channelState.getHttpChannel().blockingReadFailure(x);
         }
     }
 
@@ -418,23 +421,17 @@ public class HttpInput extends ServletInputStream implements Runnable
      * @param item the content to add
      * @return true if content channel woken for read
      */
+    // TODO: remove this method, only used by test.
     public boolean prependContent(Content item)
     {
-        boolean woken = false;
         synchronized (_inputQ)
         {
             _inputQ.push(item);
             _contentConsumed -= item.remaining();
             if (LOG.isDebugEnabled())
                 LOG.debug("{} prependContent {}", this, item);
-
-            if (_listener == null)
-                _inputQ.notify();
-            else
-                woken = _channelState.onReadPossible();
+            return wakeup();
         }
-
-        return woken;
     }
 
     /**
@@ -445,23 +442,18 @@ public class HttpInput extends ServletInputStream implements Runnable
      */
     public boolean addContent(Content item)
     {
-        boolean woken = false;
+        // TODO: must consume item if the state is failed.
         synchronized (_inputQ)
         {
+            _readInterested = false;
             if (_firstByteTimeStamp == -1)
                 _firstByteTimeStamp = System.nanoTime();
             _contentArrived += item.remaining();
             _inputQ.offer(item);
             if (LOG.isDebugEnabled())
                 LOG.debug("{} addContent {}", this, item);
-
-            if (_listener == null)
-                _inputQ.notify();
-            else
-                woken = _channelState.onReadPossible();
+            return wakeup();
         }
-
-        return woken;
     }
 
     public boolean hasContent()
@@ -519,7 +511,7 @@ public class HttpInput extends ServletInputStream implements Runnable
         {
             try
             {
-                while (!isFinished())
+                while (true)
                 {
                     Content item = nextContent();
                     if (item == null)
@@ -575,8 +567,7 @@ public class HttpInput extends ServletInputStream implements Runnable
                     return true;
                 if (nextReadable() != null)
                     return true;
-
-                _channelState.onReadUnready();
+                _readInterested = _channelState.onReadUnready();
             }
             return false;
         }
@@ -608,7 +599,7 @@ public class HttpInput extends ServletInputStream implements Runnable
                 if (content)
                     woken = _channelState.onReadReady();
                 else
-                    _channelState.onReadUnready();
+                    _readInterested = _channelState.onReadUnready();
             }
         }
         catch (IOException e)
@@ -620,9 +611,25 @@ public class HttpInput extends ServletInputStream implements Runnable
             wake();
     }
 
+    public boolean onIdleTimeout(Throwable x)
+    {
+        synchronized (_inputQ)
+        {
+            if (!isError())
+            {
+                if (_readInterested)
+                {
+                    x.addSuppressed(new Throwable("HttpInput idle timeout"));
+                    _state = new ErrorState(x);
+                    return wakeup();
+                }
+            }
+            return false;
+        }
+    }
+
     public boolean failed(Throwable x)
     {
-        boolean woken = false;
         synchronized (_inputQ)
         {
             if (_state instanceof ErrorState)
@@ -640,14 +647,16 @@ public class HttpInput extends ServletInputStream implements Runnable
                 x.addSuppressed(new Throwable("HttpInput failure"));
                 _state = new ErrorState(x);
             }
-
-            if (_listener == null)
-                _inputQ.notify();
-            else
-                woken = _channelState.onReadPossible();
+            return wakeup();
         }
+    }
 
-        return woken;
+    private boolean wakeup()
+    {
+        if (_listener != null)
+            return _channelState.onReadPossible();
+        _inputQ.notify();
+        return false;
     }
 
     /*
