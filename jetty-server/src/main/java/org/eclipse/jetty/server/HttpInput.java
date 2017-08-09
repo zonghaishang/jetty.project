@@ -62,7 +62,7 @@ public class HttpInput extends ServletInputStream implements Runnable
     private long _contentArrived;
     private long _contentConsumed;
     private long _blockUntil;
-    private boolean _readInterested;
+    private boolean _waitingForContent;
 
     public HttpInput(HttpChannelState state)
     {
@@ -382,7 +382,7 @@ public class HttpInput extends ServletInputStream implements Runnable
     {
         try
         {
-            _readInterested = true;
+            _waitingForContent = true;
             _channelState.getHttpChannel().blockingReadInterested();
 
             long timeout = 0;
@@ -445,7 +445,7 @@ public class HttpInput extends ServletInputStream implements Runnable
         // TODO: must consume item if the state is failed.
         synchronized (_inputQ)
         {
-            _readInterested = false;
+            _waitingForContent = false;
             if (_firstByteTimeStamp == -1)
                 _firstByteTimeStamp = System.nanoTime();
             _contentArrived += item.remaining();
@@ -567,7 +567,8 @@ public class HttpInput extends ServletInputStream implements Runnable
                     return true;
                 if (nextReadable() != null)
                     return true;
-                _readInterested = _channelState.onReadUnready();
+                _channelState.onReadUnready();
+                _waitingForContent = true;
             }
             return false;
         }
@@ -597,9 +598,14 @@ public class HttpInput extends ServletInputStream implements Runnable
                 boolean content = nextContent() != null;
 
                 if (content)
+                {
                     woken = _channelState.onReadReady();
+                }
                 else
-                    _readInterested = _channelState.onReadUnready();
+                {
+                    _channelState.onReadUnready();
+                    _waitingForContent = true;
+                }
             }
         }
         catch (IOException e)
@@ -617,7 +623,7 @@ public class HttpInput extends ServletInputStream implements Runnable
         {
             if (!isError())
             {
-                if (_readInterested)
+                if (_waitingForContent)
                 {
                     x.addSuppressed(new Throwable("HttpInput idle timeout"));
                     _state = new ErrorState(x);

@@ -978,9 +978,8 @@ public class HttpChannelState
      * register for read interest by calling {@link HttpChannel#asyncReadInterested()}
      * either from this method or from a subsequent call to {@link #unhandle()}.
      */
-    public boolean onReadUnready()
+    public void onReadUnready()
     {
-        boolean result=false;
         boolean interested=false;
         try(Locker.Lock lock= _locker.lock())
         {
@@ -990,21 +989,16 @@ public class HttpChannelState
                 _asyncReadPossible=false; // Assumes this has been checked in isReady() with lock held
                 if (_state==State.ASYNC_WAIT)
                 {
-                    result=interested=true;
+                    interested=true;
                     _asyncRead=Interest.REGISTERED;
                 }
                 else
-                {
-                    result=true;
                     _asyncRead=Interest.NEEDED;
-                }
             }
         }
 
         if (interested)
             _channel.asyncReadInterested();
-
-        return result;
     }
 
     /* ------------------------------------------------------------ */

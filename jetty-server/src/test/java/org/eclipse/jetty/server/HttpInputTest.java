@@ -97,10 +97,10 @@ public class HttpInputTest
         })
         {
             @Override
-            public boolean onReadUnready()
+            public void onReadUnready()
             {
                 _history.add("unready");
-                return super.onReadUnready();
+                super.onReadUnready();
             }
 
             @Override
