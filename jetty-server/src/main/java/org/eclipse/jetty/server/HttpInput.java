@@ -415,28 +415,6 @@ public class HttpInput extends ServletInputStream implements Runnable
     }
 
     /**
-     * Adds some content to the start of this input stream.
-     * <p>Typically used to push back content that has
-     * been read, perhaps mutated.  The bytes prepended are
-     * deducted for the contentConsumed total</p>
-     *
-     * @param item the content to add
-     * @return true if content channel woken for read
-     */
-    // TODO: remove this method, only used by test.
-    public boolean prependContent(Content item)
-    {
-        synchronized (_inputQ)
-        {
-            _inputQ.push(item);
-            _contentConsumed -= item.remaining();
-            if (LOG.isDebugEnabled())
-                LOG.debug("{} prependContent {}", this, item);
-            return wakeup();
-        }
-    }
-
-    /**
      * Adds some content to this input stream.
      *
      * @param item the content to add
