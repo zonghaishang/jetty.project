@@ -90,7 +90,7 @@ public class HttpInputTest
         _in = new HttpInput(new HttpChannelState(new HttpChannel(null, new HttpConfiguration(), null, null)
         {
             @Override
-            public void asyncReadInterested()
+            public void onAsyncWaitForContent()
             {
                 _history.add("asyncReadInterested");
             }

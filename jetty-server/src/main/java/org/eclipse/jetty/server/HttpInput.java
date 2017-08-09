@@ -384,7 +384,7 @@ public class HttpInput extends ServletInputStream implements Runnable
         try
         {
             _waitingForContent = true;
-            _channelState.getHttpChannel().blockingReadInterested();
+            _channelState.getHttpChannel().onBlockWaitForContent();
 
             State oldState = _state;
             long timeout = 0;
@@ -410,7 +410,7 @@ public class HttpInput extends ServletInputStream implements Runnable
         }
         catch (Throwable x)
         {
-            _channelState.getHttpChannel().blockingReadFailure(x);
+            _channelState.getHttpChannel().onBlockWaitForContentFailure(x);
         }
     }
 
