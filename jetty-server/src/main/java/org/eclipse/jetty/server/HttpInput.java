@@ -18,6 +18,7 @@
 
 package org.eclipse.jetty.server;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
@@ -442,17 +443,25 @@ public class HttpInput extends ServletInputStream implements Runnable
      */
     public boolean addContent(Content item)
     {
-        // TODO: must consume item if the state is failed.
         synchronized (_inputQ)
         {
             _waitingForContent = false;
             if (_firstByteTimeStamp == -1)
                 _firstByteTimeStamp = System.nanoTime();
-            _contentArrived += item.remaining();
-            _inputQ.offer(item);
-            if (LOG.isDebugEnabled())
-                LOG.debug("{} addContent {}", this, item);
-            return wakeup();
+            if (isFinished())
+            {
+                Throwable failure = isError() ? ((ErrorState)_state).getError() : new EOFException("Content after EOF");
+                item.failed(failure);
+                return false;
+            }
+            else
+            {
+                _contentArrived += item.remaining();
+                _inputQ.offer(item);
+                if (LOG.isDebugEnabled())
+                    LOG.debug("{} addContent {}", this, item);
+                return wakeup();
+            }
         }
     }
 
