@@ -386,26 +386,27 @@ public class HttpInput extends ServletInputStream implements Runnable
             _waitingForContent = true;
             _channelState.getHttpChannel().blockingReadInterested();
 
+            State oldState = _state;
             long timeout = 0;
-            if (_blockUntil != 0)
+            while (true)
             {
-                timeout = TimeUnit.NANOSECONDS.toMillis(_blockUntil - System.nanoTime());
-                if (timeout <= 0)
-                    throw new TimeoutException();
+                if (_blockUntil != 0)
+                {
+                    timeout = TimeUnit.NANOSECONDS.toMillis(_blockUntil - System.nanoTime());
+                    if (timeout <= 0)
+                        throw new TimeoutException(String.format("Blocking timeout %d ms", getBlockingTimeout()));
+                }
+
+                if (!_inputQ.isEmpty() || _state != oldState)
+                    break;
+
+                if (LOG.isDebugEnabled())
+                    LOG.debug("{} blocking for content timeout={}", this, timeout);
+                if (timeout > 0)
+                    _inputQ.wait(timeout);
+                else
+                    _inputQ.wait();
             }
-
-            if (LOG.isDebugEnabled())
-                LOG.debug("{} blocking for content timeout={}", this, timeout);
-            if (timeout > 0)
-                _inputQ.wait(timeout);
-            else
-                _inputQ.wait();
-
-            // TODO: cannot return unless there is content or timeout,
-            // TODO: so spurious wakeups are not handled correctly.
-
-            if (_blockUntil != 0 && TimeUnit.NANOSECONDS.toMillis(_blockUntil - System.nanoTime()) <= 0)
-                throw new TimeoutException(String.format("Blocking timeout %d ms", getBlockingTimeout()));
         }
         catch (Throwable x)
         {
