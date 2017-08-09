@@ -613,14 +613,11 @@ public class HttpInput extends ServletInputStream implements Runnable
     {
         synchronized (_inputQ)
         {
-            if (!isError())
+            if (_waitingForContent && !isError())
             {
-                if (_waitingForContent)
-                {
-                    x.addSuppressed(new Throwable("HttpInput idle timeout"));
-                    _state = new ErrorState(x);
-                    return wakeup();
-                }
+                x.addSuppressed(new Throwable("HttpInput idle timeout"));
+                _state = new ErrorState(x);
+                return wakeup();
             }
             return false;
         }
@@ -630,13 +627,18 @@ public class HttpInput extends ServletInputStream implements Runnable
     {
         synchronized (_inputQ)
         {
-            if (_state instanceof ErrorState)
+            // Errors may be reported multiple times, for example
+            // a local idle timeout and a remote I/O failure.
+            if (isError())
             {
-                // Log both the original and current failure
-                // without modifying the original failure.
-                Throwable failure = new Throwable(((ErrorState)_state).getError());
-                failure.addSuppressed(x);
-                LOG.warn(failure);
+                if (LOG.isDebugEnabled())
+                {
+                    // Log both the original and current failure
+                    // without modifying the original failure.
+                    Throwable failure = new Throwable(((ErrorState)_state).getError());
+                    failure.addSuppressed(x);
+                    LOG.debug(failure);
+                }
             }
             else
             {
