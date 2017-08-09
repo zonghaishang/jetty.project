@@ -386,7 +386,7 @@ public class HttpInput extends ServletInputStream implements Runnable
             _waitingForContent = true;
             _channelState.getHttpChannel().onBlockWaitForContent();
 
-            State oldState = _state;
+            boolean loop = false;
             long timeout = 0;
             while (true)
             {
@@ -397,7 +397,9 @@ public class HttpInput extends ServletInputStream implements Runnable
                         throw new TimeoutException(String.format("Blocking timeout %d ms", getBlockingTimeout()));
                 }
 
-                if (!_inputQ.isEmpty() || _state != oldState)
+                // This method is called from a loop, so we just
+                // need to check the timeout before and after waiting.
+                if (loop)
                     break;
 
                 if (LOG.isDebugEnabled())
@@ -406,6 +408,8 @@ public class HttpInput extends ServletInputStream implements Runnable
                     _inputQ.wait(timeout);
                 else
                     _inputQ.wait();
+
+                loop = true;
             }
         }
         catch (Throwable x)
