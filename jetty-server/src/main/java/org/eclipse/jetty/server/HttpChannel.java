@@ -100,7 +100,11 @@ public class HttpChannel implements Runnable, HttpOutput.Interceptor
         _requestLog = connector == null ? null : connector.getServer().getRequestLog();
 
         if (LOG.isDebugEnabled())
-            LOG.debug("new {} -> {},{},{}",this,_endPoint,_endPoint.getConnection(),_state);
+            LOG.debug("new {} -> {},{},{}",
+                    this,
+                    _endPoint,
+                    _endPoint==null?null:_endPoint.getConnection(),
+                    _state);
     }
 
     protected HttpInput newHttpInput(HttpChannelState state)
