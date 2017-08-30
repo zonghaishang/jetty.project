@@ -57,9 +57,21 @@ import org.junit.runner.RunWith;
 @RunWith(AdvancedRunner.class)
 public class PathWatcherTest
 {
-    public static final int QUIET_TIME = OS.IS_LINUX?300:1000;
-    public static final int WAIT_TIME = 2 * QUIET_TIME;
-    public static final int LONG_TIME = 5 * QUIET_TIME;
+    public static final int QUIET_TIME;
+    public static final int WAIT_TIME;
+    public static final int LONG_TIME;
+    
+    static
+    {
+        if (OS.IS_LINUX)
+            QUIET_TIME = 300;
+        else if (OS.IS_OSX)
+            QUIET_TIME = 5000;
+        else
+            QUIET_TIME = 1000;
+        WAIT_TIME = 2 * QUIET_TIME;
+        LONG_TIME = 5 * QUIET_TIME;
+    }
     
     public static class PathWatchEventCapture implements PathWatcher.Listener
     {
@@ -140,7 +152,7 @@ public class PathWatcherTest
         {
             try
             {
-                assertThat("Event match (file|diretory) count", this.events.size(), is(expectedEvents.size()));
+                assertThat("Event match (file|directory) count", this.events.size(), is(expectedEvents.size()));
 
                 for (Map.Entry<String, PathWatchEventType[]> entry : expectedEvents.entrySet())
                 {
