@@ -66,9 +66,637 @@ import org.eclipse.jetty.util.log.Logger;
  */
 public class PathWatcher extends AbstractLifeCycle implements Runnable
 {
-    private static final Logger LOG = Log.getLogger(PathWatcher.class);
+    public static class Config implements Predicate<Path>
+    {
+        public static final int UNLIMITED_DEPTH = -9999;
+        
+        private static final String PATTERN_SEP;
+
+        static
+        {
+            String sep = File.separator;
+            if (File.separatorChar == '\\')
+            {
+                sep = "\\\\";
+            }
+            PATTERN_SEP = sep;
+        }
+
+        protected final Config parent;
+        protected final Path path;
+        protected final IncludeExcludeSet<PathMatcher,Path> includeExclude;
+        protected int recurseDepth = 0; // 0 means no sub-directories are scanned
+        protected boolean excludeHidden = false;
+        protected long pauseUntil;
+
+        public Config(Path path)
+        {
+            this(path,null);
+        }
+
+        public Config(Path path, Config parent)
+        {
+            this.parent = parent;
+            this.includeExclude = parent==null ? new IncludeExcludeSet<>(PathMatcherSet.class) : parent.includeExclude;
+            
+            Path dir = path;
+            if (!Files.exists(path))
+                throw new IllegalStateException("Path does not exist: "+path);
+            
+            if (!Files.isDirectory(path))
+            {
+                dir = path.getParent();
+                includeExclude.include(new ExactPathMatcher(path));
+                setRecurseDepth(0);
+            }
+            
+            this.path = dir;
+        }
+
+        public Config getParent()
+        {
+            return parent;
+        }
+        
+        public void setPauseUntil(long time)
+        {
+            if (time>pauseUntil)
+                pauseUntil=time;
+        }
+        
+        public boolean isPaused(long now)
+        {
+            if (pauseUntil==0)
+                return false;
+            if (pauseUntil>now)
+            {
+                if (LOG.isDebugEnabled())
+                    LOG.debug("PAUSED {}",this);
+                return true;
+            }
+            if (LOG.isDebugEnabled())
+                LOG.debug("unpaused {}",this);
+            pauseUntil = 0;
+            return false;
+        }
+        
+        /**
+         * Add an exclude PathMatcher
+         *
+         * @param matcher
+         *            the path matcher for this exclude
+         */
+        public void addExclude(PathMatcher matcher)
+        {
+            includeExclude.exclude(matcher);
+        }
+
+        /**
+         * Add an exclude PathMatcher.
+         * <p>
+         * Note: this pattern is FileSystem specific (so use "/" for Linux and OSX, and "\\" for Windows)
+         *
+         * @param syntaxAndPattern
+         *            the PathMatcher syntax and pattern to use
+         * @see FileSystem#getPathMatcher(String) for detail on syntax and pattern
+         */
+        public void addExclude(final String syntaxAndPattern)
+        {
+            if (LOG.isDebugEnabled())
+                LOG.debug("Adding exclude: [{}]",syntaxAndPattern);
+            addExclude(path.getFileSystem().getPathMatcher(syntaxAndPattern));
+        }
+
+        /**
+         * Add a <code>glob:</code> syntax pattern exclude reference in a directory relative, os neutral, pattern.
+         *
+         * <pre>
+         *    On Linux:
+         *    Config config = new Config(Path("/home/user/example"));
+         *    config.addExcludeGlobRelative("*.war") =&gt; "glob:/home/user/example/*.war"
+         * 
+         *    On Windows
+         *    Config config = new Config(Path("D:/code/examples"));
+         *    config.addExcludeGlobRelative("*.war") =&gt; "glob:D:\\code\\examples\\*.war"
+         *
+         * </pre>
+         *
+         * @param pattern
+         *            the pattern, in unixy format, relative to config.dir
+         */
+        public void addExcludeGlobRelative(String pattern)
+        {
+            addExclude(toGlobPattern(path,pattern));
+        }
+
+        /**
+         * Exclude hidden files and hidden directories
+         */
+        public void addExcludeHidden()
+        {
+            if (!excludeHidden)
+            {
+                if (LOG.isDebugEnabled())
+                {
+                    LOG.debug("Adding hidden files and directories to exclusions");
+                }
+                excludeHidden = true;
+            }
+        }
+
+        /**
+         * Add multiple exclude PathMatchers
+         *
+         * @param syntaxAndPatterns
+         *            the list of PathMatcher syntax and patterns to use
+         * @see FileSystem#getPathMatcher(String) for detail on syntax and pattern
+         */
+        public void addExcludes(List<String> syntaxAndPatterns)
+        {
+            for (String syntaxAndPattern : syntaxAndPatterns)
+            {
+                addExclude(syntaxAndPattern);
+            }
+        }
+
+        /**
+         * Add an include PathMatcher
+         *
+         * @param matcher
+         *            the path matcher for this include
+         */
+        public void addInclude(PathMatcher matcher)
+        {
+            includeExclude.include(matcher);
+        }
+
+        /**
+         * Add an include PathMatcher
+         *
+         * @param syntaxAndPattern
+         *            the PathMatcher syntax and pattern to use
+         * @see FileSystem#getPathMatcher(String) for detail on syntax and pattern
+         */
+        public void addInclude(String syntaxAndPattern)
+        {
+            if (LOG.isDebugEnabled())
+            {
+                LOG.debug("Adding include: [{}]",syntaxAndPattern);
+            }
+            addInclude(path.getFileSystem().getPathMatcher(syntaxAndPattern));
+        }
+
+        /**
+         * Add a <code>glob:</code> syntax pattern reference in a directory relative, os neutral, pattern.
+         *
+         * <pre>
+         *    On Linux:
+         *    Config config = new Config(Path("/home/user/example"));
+         *    config.addIncludeGlobRelative("*.war") =&gt; "glob:/home/user/example/*.war"
+         * 
+         *    On Windows
+         *    Config config = new Config(Path("D:/code/examples"));
+         *    config.addIncludeGlobRelative("*.war") =&gt; "glob:D:\\code\\examples\\*.war"
+         *
+         * </pre>
+         *
+         * @param pattern
+         *            the pattern, in unixy format, relative to config.dir
+         */
+        public void addIncludeGlobRelative(String pattern)
+        {
+            addInclude(toGlobPattern(path,pattern));
+        }
+
+        /**
+         * Add multiple include PathMatchers
+         *
+         * @param syntaxAndPatterns
+         *            the list of PathMatcher syntax and patterns to use
+         * @see FileSystem#getPathMatcher(String) for detail on syntax and pattern
+         */
+        public void addIncludes(List<String> syntaxAndPatterns)
+        {
+            for (String syntaxAndPattern : syntaxAndPatterns)
+            {
+                addInclude(syntaxAndPattern);
+            }
+        }
+
+        /**
+         * Build a new config from a this configuration.
+         * <p>
+         * Useful for working with sub-directories that also need to be watched.
+         *
+         * @param dir
+         *            the directory to build new Config from (using this config as source of includes/excludes)
+         * @return the new Config
+         */
+        public Config asSubConfig(Path dir)
+        {
+            Config subconfig = new Config(dir,this);
+            if (dir == this.path)
+                throw new IllegalStateException("sub "+dir.toString()+" of "+this);
+
+            if (this.recurseDepth == UNLIMITED_DEPTH)
+                subconfig.recurseDepth = UNLIMITED_DEPTH;
+            else
+                subconfig.recurseDepth = this.recurseDepth - (dir.getNameCount() - this.path.getNameCount());                            
+            
+            if (LOG.isDebugEnabled())
+                LOG.debug("subconfig {} of {}",subconfig,path);
+            return subconfig;
+        }
+
+        public int getRecurseDepth()
+        {
+            return recurseDepth;
+        }
+        
+        public boolean isRecurseDepthUnlimited ()
+        {
+            return this.recurseDepth == UNLIMITED_DEPTH;
+        }
+        
+        public Path getPath ()
+        {
+            return this.path;
+        }
+
+        public Path resolve(Path path)
+        {
+            if (Files.isDirectory(this.path))
+                return this.path.resolve(path);
+            if (Files.exists(this.path))
+                return this.path;
+            return path;
+        }
+        
+        public boolean test(Path path)
+        {
+            try
+            {
+                if (excludeHidden && Files.isHidden(path))
+                {
+                    if (LOG.isDebugEnabled())
+                        LOG.debug("test({}) -> [Hidden]", path);
+                    return false;
+                }
+
+                if (!path.startsWith(this.path))
+                {
+                    if (LOG.isDebugEnabled())
+                        LOG.debug("test({}) -> [!child {}]", path, this.path);
+                    return false;
+                }
+                
+                if (recurseDepth!=UNLIMITED_DEPTH)
+                {
+                    int depth = path.getNameCount() - this.path.getNameCount() - 1;
+                    
+                    if (depth>recurseDepth)
+                    {
+                        if (LOG.isDebugEnabled())
+                            LOG.debug("test({}) -> [depth {}>{}]",path,depth,recurseDepth);
+                        return false;
+                    }
+                }
+                
+                boolean matched = includeExclude.test(path);
+
+                if (LOG.isDebugEnabled())
+                    LOG.debug("test({}) -> {}", path, matched);
+                
+                return matched;
+            }
+            catch(IOException e)
+            {
+                throw new RuntimeException(e);
+            }
+        }
+
+        /**
+         * Set the recurse depth for the directory scanning.
+         * <p>
+         * -999 indicates arbitrarily deep recursion, 0 indicates no recursion, 1 is only one directory deep, and so on.
+         *
+         * @param depth
+         *            the number of directories deep to recurse
+         */
+        public void setRecurseDepth(int depth)
+        {
+            this.recurseDepth = depth;
+        }
+        
+        private String toGlobPattern(Path path, String subPattern)
+        {
+            StringBuilder s = new StringBuilder();
+            s.append("glob:");
+
+            boolean needDelim = false;
+
+            // Add root (aka "C:\" for Windows)
+            Path root = path.getRoot();
+            if (root != null)
+            {
+                if (LOG.isDebugEnabled())
+                {
+                    LOG.debug("Path: {} -> Root: {}", path, root);
+                }
+                for (char c : root.toString().toCharArray())
+                {
+                    if (c == '\\')
+                    {
+                        s.append(PATTERN_SEP);
+                    }
+                    else
+                    {
+                        s.append(c);
+                    }
+                }
+            }
+            else
+            {
+                needDelim = true;
+            }
+
+            // Add the individual path segments
+            for (Path segment : path)
+            {
+                if (needDelim)
+                {
+                    s.append(PATTERN_SEP);
+                }
+                s.append(segment);
+                needDelim = true;
+            }
+
+            // Add the sub pattern (if specified)
+            if ((subPattern != null) && (subPattern.length() > 0))
+            {
+                if (needDelim)
+                {
+                    s.append(PATTERN_SEP);
+                }
+                for (char c : subPattern.toCharArray())
+                {
+                    if (c == '/')
+                    {
+                        s.append(PATTERN_SEP);
+                    }
+                    else
+                    {
+                        s.append(c);
+                    }
+                }
+            }
+
+            return s.toString();
+        }
+
+
+        DirAction handleDir(Path path) throws IOException
+        {
+            if (!Files.isDirectory(path))
+                return DirAction.IGNORE;
+            if (excludeHidden && Files.isHidden(path))
+                return DirAction.IGNORE;
+            if (getRecurseDepth()==0)
+                return DirAction.WATCH;
+            return DirAction.ENTER;
+        }
+        
+        @Override
+        public String toString()
+        {
+            StringBuilder s = new StringBuilder();
+            s.append(path).append(" [depth=");
+            if (recurseDepth==UNLIMITED_DEPTH)
+                s.append("UNLIMITED");
+            else
+                s.append(recurseDepth);
+            s.append(']');
+            return s.toString();
+        }
+    }
     
+
+    public static enum DirAction
+    {
+        IGNORE, WATCH, ENTER;
+    }
+    
+    /**
+     * Listener for path change events
+     */
+    public static interface Listener extends EventListener
+    {
+        void onPathWatchEvent(PathWatchEvent event);
+    }
+    
+    /**
+     * EventListListener
+     *
+     * Listener that reports accumulated events in one shot
+     */
+    public static interface EventListListener extends EventListener
+    {
+        void onPathWatchEvents(List<PathWatchEvent> events);
+    }
+    
+    /**
+     * PathWatchEvent
+     *
+     * Represents a file event. Reported to registered listeners.
+     */
+    public class PathWatchEvent
+    {
+        private final Path path;
+        private final PathWatchEventType type;
+        private final Config config;
+        long checked;
+        long modified;
+        long length;
+     
+        public PathWatchEvent(Path path, PathWatchEventType type, Config config)
+        {
+            this.path = path;
+            this.type = type;
+            this.config = config;
+            checked = TimeUnit.NANOSECONDS.toMillis(System.nanoTime());
+            check();
+        }
+
+        public Config getConfig()
+        {
+            return config;
+        }
+
+        public PathWatchEvent(Path path, WatchEvent<Path> event, Config config)
+        {
+            this.path = path;
+            if (event.kind() == ENTRY_CREATE)
+            {
+                this.type = PathWatchEventType.ADDED;
+            }
+            else if (event.kind() == ENTRY_DELETE)
+            {
+                this.type = PathWatchEventType.DELETED;
+            }
+            else if (event.kind() == ENTRY_MODIFY)
+            {
+                this.type = PathWatchEventType.MODIFIED;
+            }
+            else
+            {
+                this.type = PathWatchEventType.UNKNOWN;
+            }
+            this.config = config;
+            checked = TimeUnit.NANOSECONDS.toMillis(System.nanoTime());
+            check();
+        }
+        
+        private void check()
+        {
+            if (Files.exists(path))
+            {
+                try
+                {
+                    modified = Files.getLastModifiedTime(path).toMillis();
+                    length = Files.size(path);
+                }
+                catch(IOException e)
+                {
+                    modified = -1;
+                    length = -1;
+                }
+            }
+            else
+            {
+                modified = -1;
+                length = -1;
+            }            
+        }
+
+        public boolean isQuiet(long now, long quietTime)
+        {
+            long lastModified = modified;
+            long lastLength = length;
+            
+            check();
+            
+            if (lastModified == modified && lastLength == length)
+                return (now-checked)>=quietTime;
+            
+            checked = now;
+            return false;
+        }
+        
+        public long toQuietCheck(long now, long quietTime)
+        {
+            long check = quietTime - (now-checked);
+            if (check<=0)
+                return quietTime;
+            return check;
+        }
+        
+        public void modified()
+        {
+            long now = TimeUnit.NANOSECONDS.toMillis(System.nanoTime());
+            checked = now;
+            check();
+            config.setPauseUntil(now+getUpdateQuietTimeMillis());
+        }
+        
+        /** 
+         * @see java.lang.Object#equals(java.lang.Object)
+         */
+        @Override
+        public boolean equals(Object obj)
+        {
+            if (this == obj)
+            {
+                return true;
+            }
+            if (obj == null)
+            {
+                return false;
+            }
+            if (getClass() != obj.getClass())
+            {
+                return false;
+            }
+            PathWatchEvent other = (PathWatchEvent)obj;
+            if (path == null)
+            {
+                if (other.path != null)
+                {
+                    return false;
+                }
+            }
+            else if (!path.equals(other.path))
+            {
+                return false;
+            }
+            if (type != other.type)
+            {
+                return false;
+            }
+            return true;
+        }
+
+        public Path getPath()
+        {
+            return path;
+        }
+
+        public PathWatchEventType getType()
+        {
+            return type;
+        }
+        
+        @Deprecated
+        public int getCount()
+        {
+            return 1;
+        }
+        
+        /** 
+         * @see java.lang.Object#hashCode()
+         */
+        @Override
+        public int hashCode()
+        {
+            final int prime = 31;
+            int result = 1;
+            result = (prime * result) + ((path == null)?0:path.hashCode());
+            result = (prime * result) + ((type == null)?0:type.hashCode());
+            return result;
+        }
+
+        /** 
+         * @see java.lang.Object#toString()
+         */
+        @Override
+        public String toString()
+        {
+            return String.format("PathWatchEvent[%8s|%s]",type,path);
+        }
+    }
+
+
+    /**
+     * PathWatchEventType
+     *
+     * Type of an event
+     */
+    public static enum PathWatchEventType
+    {
+        ADDED, DELETED, MODIFIED, UNKNOWN;
+    }
+
     private static final boolean IS_WINDOWS;
+    
     static
     {
         String os = System.getProperty("os.name");
@@ -83,6 +711,7 @@ public class PathWatcher extends AbstractLifeCycle implements Runnable
         }
     }
 
+    private static final Logger LOG = Log.getLogger(PathWatcher.class);
 
     @SuppressWarnings("unchecked")
     protected static <T> WatchEvent<T> cast(WatchEvent<?> event)
@@ -824,636 +1453,7 @@ public class PathWatcher extends AbstractLifeCycle implements Runnable
         }
     }
 
-    public static class Config implements Predicate<Path>
-    {
-
-        public static final int UNLIMITED_DEPTH = -9999;
-        
-        private static final String PATTERN_SEP;
-
-        static
-        {
-            String sep = File.separator;
-            if (File.separatorChar == '\\')
-            {
-                sep = "\\\\";
-            }
-            PATTERN_SEP = sep;
-        }
-
-        protected final Config parent;
-        protected final Path path;
-        protected final IncludeExcludeSet<PathMatcher,Path> includeExclude;
-        protected int recurseDepth = 0; // 0 means no sub-directories are scanned
-        protected boolean excludeHidden = false;
-        protected long pauseUntil;
-
-        public Config(Path path)
-        {
-            this(path,null);
-        }
-
-        public Config(Path path, Config parent)
-        {
-            this.parent = parent;
-            this.includeExclude = parent==null ? new IncludeExcludeSet<>(PathMatcherSet.class) : parent.includeExclude;
-            
-            Path dir = path;
-            if (!Files.exists(path))
-                throw new IllegalStateException("Path does not exist: "+path);
-            
-            if (!Files.isDirectory(path))
-            {
-                dir = path.getParent();
-                includeExclude.include(new ExactPathMatcher(path));
-                setRecurseDepth(0);
-            }
-            
-            this.path = dir;
-        }
-
-        public Config getParent()
-        {
-            return parent;
-        }
-        
-        public void setPauseUntil(long time)
-        {
-            if (time>pauseUntil)
-                pauseUntil=time;
-        }
-        
-        public boolean isPaused(long now)
-        {
-            if (pauseUntil==0)
-                return false;
-            if (pauseUntil>now)
-            {
-                if (LOG.isDebugEnabled())
-                    LOG.debug("PAUSED {}",this);
-                return true;
-            }
-            if (LOG.isDebugEnabled())
-                LOG.debug("unpaused {}",this);
-            pauseUntil = 0;
-            return false;
-        }
-        
-        /**
-         * Add an exclude PathMatcher
-         *
-         * @param matcher
-         *            the path matcher for this exclude
-         */
-        public void addExclude(PathMatcher matcher)
-        {
-            includeExclude.exclude(matcher);
-        }
-
-        /**
-         * Add an exclude PathMatcher.
-         * <p>
-         * Note: this pattern is FileSystem specific (so use "/" for Linux and OSX, and "\\" for Windows)
-         *
-         * @param syntaxAndPattern
-         *            the PathMatcher syntax and pattern to use
-         * @see FileSystem#getPathMatcher(String) for detail on syntax and pattern
-         */
-        public void addExclude(final String syntaxAndPattern)
-        {
-            if (LOG.isDebugEnabled())
-                LOG.debug("Adding exclude: [{}]",syntaxAndPattern);
-            addExclude(path.getFileSystem().getPathMatcher(syntaxAndPattern));
-        }
-
-        /**
-         * Add a <code>glob:</code> syntax pattern exclude reference in a directory relative, os neutral, pattern.
-         *
-         * <pre>
-         *    On Linux:
-         *    Config config = new Config(Path("/home/user/example"));
-         *    config.addExcludeGlobRelative("*.war") =&gt; "glob:/home/user/example/*.war"
-         * 
-         *    On Windows
-         *    Config config = new Config(Path("D:/code/examples"));
-         *    config.addExcludeGlobRelative("*.war") =&gt; "glob:D:\\code\\examples\\*.war"
-         *
-         * </pre>
-         *
-         * @param pattern
-         *            the pattern, in unixy format, relative to config.dir
-         */
-        public void addExcludeGlobRelative(String pattern)
-        {
-            addExclude(toGlobPattern(path,pattern));
-        }
-
-        /**
-         * Exclude hidden files and hidden directories
-         */
-        public void addExcludeHidden()
-        {
-            if (!excludeHidden)
-            {
-                if (LOG.isDebugEnabled())
-                {
-                    LOG.debug("Adding hidden files and directories to exclusions");
-                }
-                excludeHidden = true;
-            }
-        }
-
-        /**
-         * Add multiple exclude PathMatchers
-         *
-         * @param syntaxAndPatterns
-         *            the list of PathMatcher syntax and patterns to use
-         * @see FileSystem#getPathMatcher(String) for detail on syntax and pattern
-         */
-        public void addExcludes(List<String> syntaxAndPatterns)
-        {
-            for (String syntaxAndPattern : syntaxAndPatterns)
-            {
-                addExclude(syntaxAndPattern);
-            }
-        }
-
-        /**
-         * Add an include PathMatcher
-         *
-         * @param matcher
-         *            the path matcher for this include
-         */
-        public void addInclude(PathMatcher matcher)
-        {
-            includeExclude.include(matcher);
-        }
-
-        /**
-         * Add an include PathMatcher
-         *
-         * @param syntaxAndPattern
-         *            the PathMatcher syntax and pattern to use
-         * @see FileSystem#getPathMatcher(String) for detail on syntax and pattern
-         */
-        public void addInclude(String syntaxAndPattern)
-        {
-            if (LOG.isDebugEnabled())
-            {
-                LOG.debug("Adding include: [{}]",syntaxAndPattern);
-            }
-            addInclude(path.getFileSystem().getPathMatcher(syntaxAndPattern));
-        }
-
-        /**
-         * Add a <code>glob:</code> syntax pattern reference in a directory relative, os neutral, pattern.
-         *
-         * <pre>
-         *    On Linux:
-         *    Config config = new Config(Path("/home/user/example"));
-         *    config.addIncludeGlobRelative("*.war") =&gt; "glob:/home/user/example/*.war"
-         * 
-         *    On Windows
-         *    Config config = new Config(Path("D:/code/examples"));
-         *    config.addIncludeGlobRelative("*.war") =&gt; "glob:D:\\code\\examples\\*.war"
-         *
-         * </pre>
-         *
-         * @param pattern
-         *            the pattern, in unixy format, relative to config.dir
-         */
-        public void addIncludeGlobRelative(String pattern)
-        {
-            addInclude(toGlobPattern(path,pattern));
-        }
-
-        /**
-         * Add multiple include PathMatchers
-         *
-         * @param syntaxAndPatterns
-         *            the list of PathMatcher syntax and patterns to use
-         * @see FileSystem#getPathMatcher(String) for detail on syntax and pattern
-         */
-        public void addIncludes(List<String> syntaxAndPatterns)
-        {
-            for (String syntaxAndPattern : syntaxAndPatterns)
-            {
-                addInclude(syntaxAndPattern);
-            }
-        }
-
-        /**
-         * Build a new config from a this configuration.
-         * <p>
-         * Useful for working with sub-directories that also need to be watched.
-         *
-         * @param dir
-         *            the directory to build new Config from (using this config as source of includes/excludes)
-         * @return the new Config
-         */
-        public Config asSubConfig(Path dir)
-        {
-            Config subconfig = new Config(dir,this);
-            if (dir == this.path)
-                throw new IllegalStateException("sub "+dir.toString()+" of "+this);
-
-            if (this.recurseDepth == UNLIMITED_DEPTH)
-                subconfig.recurseDepth = UNLIMITED_DEPTH;
-            else
-                subconfig.recurseDepth = this.recurseDepth - (dir.getNameCount() - this.path.getNameCount());                            
-            
-            if (LOG.isDebugEnabled())
-                LOG.debug("subconfig {} of {}",subconfig,path);
-            return subconfig;
-        }
-
-        public int getRecurseDepth()
-        {
-            return recurseDepth;
-        }
-        
-        public boolean isRecurseDepthUnlimited ()
-        {
-            return this.recurseDepth == UNLIMITED_DEPTH;
-        }
-        
-        public Path getPath ()
-        {
-            return this.path;
-        }
-
-        public Path resolve(Path path)
-        {
-            if (Files.isDirectory(this.path))
-                return this.path.resolve(path);
-            if (Files.exists(this.path))
-                return this.path;
-            return path;
-        }
-        
-        public boolean test(Path path)
-        {
-            try
-            {
-                if (excludeHidden && Files.isHidden(path))
-                {
-                    if (LOG.isDebugEnabled())
-                        LOG.debug("test({}) -> [Hidden]", path);
-                    return false;
-                }
-
-                if (!path.startsWith(this.path))
-                {
-                    if (LOG.isDebugEnabled())
-                        LOG.debug("test({}) -> [!child {}]", path, this.path);
-                    return false;
-                }
-                
-                if (recurseDepth!=UNLIMITED_DEPTH)
-                {
-                    int depth = path.getNameCount() - this.path.getNameCount() - 1;
-                    
-                    if (depth>recurseDepth)
-                    {
-                        if (LOG.isDebugEnabled())
-                            LOG.debug("test({}) -> [depth {}>{}]",path,depth,recurseDepth);
-                        return false;
-                    }
-                }
-                
-                boolean matched = includeExclude.test(path);
-
-                if (LOG.isDebugEnabled())
-                    LOG.debug("test({}) -> {}", path, matched);
-                
-                return matched;
-            }
-            catch(IOException e)
-            {
-                throw new RuntimeException(e);
-            }
-        }
-
-        /**
-         * Set the recurse depth for the directory scanning.
-         * <p>
-         * -999 indicates arbitrarily deep recursion, 0 indicates no recursion, 1 is only one directory deep, and so on.
-         *
-         * @param depth
-         *            the number of directories deep to recurse
-         */
-        public void setRecurseDepth(int depth)
-        {
-            this.recurseDepth = depth;
-        }
-        
-        private String toGlobPattern(Path path, String subPattern)
-        {
-            StringBuilder s = new StringBuilder();
-            s.append("glob:");
-
-            boolean needDelim = false;
-
-            // Add root (aka "C:\" for Windows)
-            Path root = path.getRoot();
-            if (root != null)
-            {
-                if (LOG.isDebugEnabled())
-                {
-                    LOG.debug("Path: {} -> Root: {}", path, root);
-                }
-                for (char c : root.toString().toCharArray())
-                {
-                    if (c == '\\')
-                    {
-                        s.append(PATTERN_SEP);
-                    }
-                    else
-                    {
-                        s.append(c);
-                    }
-                }
-            }
-            else
-            {
-                needDelim = true;
-            }
-
-            // Add the individual path segments
-            for (Path segment : path)
-            {
-                if (needDelim)
-                {
-                    s.append(PATTERN_SEP);
-                }
-                s.append(segment);
-                needDelim = true;
-            }
-
-            // Add the sub pattern (if specified)
-            if ((subPattern != null) && (subPattern.length() > 0))
-            {
-                if (needDelim)
-                {
-                    s.append(PATTERN_SEP);
-                }
-                for (char c : subPattern.toCharArray())
-                {
-                    if (c == '/')
-                    {
-                        s.append(PATTERN_SEP);
-                    }
-                    else
-                    {
-                        s.append(c);
-                    }
-                }
-            }
-
-            return s.toString();
-        }
 
 
-        DirAction handleDir(Path path) throws IOException
-        {
-            if (!Files.isDirectory(path))
-                return DirAction.IGNORE;
-            if (excludeHidden && Files.isHidden(path))
-                return DirAction.IGNORE;
-            if (getRecurseDepth()==0)
-                return DirAction.WATCH;
-            return DirAction.ENTER;
-        }
-        
-        @Override
-        public String toString()
-        {
-            StringBuilder s = new StringBuilder();
-            s.append(path).append(" [depth=");
-            if (recurseDepth==UNLIMITED_DEPTH)
-                s.append("UNLIMITED");
-            else
-                s.append(recurseDepth);
-            s.append(']');
-            return s.toString();
-        }
-    }
-
-    public static enum DirAction
-    {
-        IGNORE, WATCH, ENTER;
-    }
-    
-    /**
-     * Listener for path change events
-     */
-    public static interface Listener extends EventListener
-    {
-        void onPathWatchEvent(PathWatchEvent event);
-    }
-    
-    /**
-     * EventListListener
-     *
-     * Listener that reports accumulated events in one shot
-     */
-    public static interface EventListListener extends EventListener
-    {
-        void onPathWatchEvents(List<PathWatchEvent> events);
-    }
-
-
-    /**
-     * PathWatchEventType
-     *
-     * Type of an event
-     */
-    public static enum PathWatchEventType
-    {
-        ADDED, DELETED, MODIFIED, UNKNOWN;
-    }
-
-    /**
-     * PathWatchEvent
-     *
-     * Represents a file event. Reported to registered listeners.
-     */
-    public class PathWatchEvent
-    {
-        private final Path path;
-        private final PathWatchEventType type;
-        private final Config config;
-        long checked;
-        long modified;
-        long length;
-     
-        public PathWatchEvent(Path path, PathWatchEventType type, Config config)
-        {
-            this.path = path;
-            this.type = type;
-            this.config = config;
-            checked = TimeUnit.NANOSECONDS.toMillis(System.nanoTime());
-            check();
-        }
-
-        public Config getConfig()
-        {
-            return config;
-        }
-
-        public PathWatchEvent(Path path, WatchEvent<Path> event, Config config)
-        {
-            this.path = path;
-            if (event.kind() == ENTRY_CREATE)
-            {
-                this.type = PathWatchEventType.ADDED;
-            }
-            else if (event.kind() == ENTRY_DELETE)
-            {
-                this.type = PathWatchEventType.DELETED;
-            }
-            else if (event.kind() == ENTRY_MODIFY)
-            {
-                this.type = PathWatchEventType.MODIFIED;
-            }
-            else
-            {
-                this.type = PathWatchEventType.UNKNOWN;
-            }
-            this.config = config;
-            checked = TimeUnit.NANOSECONDS.toMillis(System.nanoTime());
-            check();
-        }
-        
-        private void check()
-        {
-            if (Files.exists(path))
-            {
-                try
-                {
-                    modified = Files.getLastModifiedTime(path).toMillis();
-                    length = Files.size(path);
-                }
-                catch(IOException e)
-                {
-                    modified = -1;
-                    length = -1;
-                }
-            }
-            else
-            {
-                modified = -1;
-                length = -1;
-            }            
-        }
-
-        public boolean isQuiet(long now, long quietTime)
-        {
-            long lastModified = modified;
-            long lastLength = length;
-            
-            check();
-            
-            if (lastModified == modified && lastLength == length)
-                return (now-checked)>=quietTime;
-            
-            checked = now;
-            return false;
-        }
-        
-        public long toQuietCheck(long now, long quietTime)
-        {
-            long check = quietTime - (now-checked);
-            if (check<=0)
-                return quietTime;
-            return check;
-        }
-        
-        public void modified()
-        {
-            long now = TimeUnit.NANOSECONDS.toMillis(System.nanoTime());
-            checked = now;
-            check();
-            config.setPauseUntil(now+getUpdateQuietTimeMillis());
-        }
-        
-        /** 
-         * @see java.lang.Object#equals(java.lang.Object)
-         */
-        @Override
-        public boolean equals(Object obj)
-        {
-            if (this == obj)
-            {
-                return true;
-            }
-            if (obj == null)
-            {
-                return false;
-            }
-            if (getClass() != obj.getClass())
-            {
-                return false;
-            }
-            PathWatchEvent other = (PathWatchEvent)obj;
-            if (path == null)
-            {
-                if (other.path != null)
-                {
-                    return false;
-                }
-            }
-            else if (!path.equals(other.path))
-            {
-                return false;
-            }
-            if (type != other.type)
-            {
-                return false;
-            }
-            return true;
-        }
-
-        public Path getPath()
-        {
-            return path;
-        }
-
-        public PathWatchEventType getType()
-        {
-            return type;
-        }
-        
-        @Deprecated
-        public int getCount()
-        {
-            return 1;
-        }
-        
-        /** 
-         * @see java.lang.Object#hashCode()
-         */
-        @Override
-        public int hashCode()
-        {
-            final int prime = 31;
-            int result = 1;
-            result = (prime * result) + ((path == null)?0:path.hashCode());
-            result = (prime * result) + ((type == null)?0:type.hashCode());
-            return result;
-        }
-
-        /** 
-         * @see java.lang.Object#toString()
-         */
-        @Override
-        public String toString()
-        {
-            return String.format("PathWatchEvent[%8s|%s]",type,path);
-        }
-    }
-    
-    
-    
 
 }
