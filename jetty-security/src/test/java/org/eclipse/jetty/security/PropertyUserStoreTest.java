@@ -21,6 +21,7 @@ package org.eclipse.jetty.security;
 import org.eclipse.jetty.toolchain.test.FS;
 import org.eclipse.jetty.toolchain.test.OS;
 import org.eclipse.jetty.toolchain.test.TestingDir;
+import org.eclipse.jetty.util.PathWatcher.PathWatchEvent;
 import org.eclipse.jetty.util.security.Credential;
 import org.hamcrest.Matcher;
 import org.junit.Rule;
@@ -31,8 +32,10 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
+import java.io.IOException;
 import java.io.OutputStream;
 import java.io.Writer;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -205,30 +208,42 @@ public class PropertyUserStoreTest
         userCount.awaitCount(3);
     }
 
-
     @Test
     public void testPropertyUserStoreLoadUpdateUser() throws Exception
     {
         assumeThat("Skipping on OSX", OS.IS_OSX, is(false));
         final UserCount userCount = new UserCount();
         final File usersFile = initUsersText();
-
-        PropertyUserStore store = new PropertyUserStore();
+        final AtomicInteger loadCount = new AtomicInteger(0);
+        PropertyUserStore store = new PropertyUserStore()
+        {
+            @Override
+            protected void loadUsers() throws IOException
+            {
+                loadCount.incrementAndGet();
+                super.loadUsers();
+            }
+        };
         store.setHotReload(true);
         store.setConfigFile(usersFile);
-
         store.registerUserListener(userCount);
 
         store.start();
         
         userCount.assertThatCount(is(3));
-
-        addAdditionalUser(usersFile,"skip: skip, roleA\n");
-
-        userCount.awaitCount(4);
-
-        assertThat("Failed to retrieve UserIdentity from PropertyUserStore directly", store.getUserIdentity("skip"), notNullValue());
+        assertThat(loadCount.get(),is(1));
         
+        addAdditionalUser(usersFile,"skip: skip, roleA\n");
+        userCount.awaitCount(4);
+        assertThat(loadCount.get(),is(2));
+        assertThat(store.getUserIdentity("skip"), notNullValue());
+        userCount.assertThatCount(is(4));
+        userCount.assertThatUsers(hasItem("skip"));
+        
+        Files.createFile(testdir.getPath().toRealPath().resolve("unrelated.txt"));
+        Thread.sleep(1100);
+        assertThat(loadCount.get(),is(2));
+
         userCount.assertThatCount(is(4));
         userCount.assertThatUsers(hasItem("skip"));
     }
