@@ -37,7 +37,11 @@ import java.io.OutputStream;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileAttribute;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -240,7 +244,8 @@ public class PropertyUserStoreTest
         userCount.assertThatCount(is(4));
         userCount.assertThatUsers(hasItem("skip"));
         
-        Files.createFile(testdir.getPath().toRealPath().resolve("unrelated.txt"));
+        Files.createFile(testdir.getPath().toRealPath().resolve("unrelated.txt"),
+            PosixFilePermissions.asFileAttribute(EnumSet.noneOf(PosixFilePermission.class)));
         Thread.sleep(1100);
         assertThat(loadCount.get(),is(2));
 
