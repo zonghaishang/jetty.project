@@ -31,9 +31,11 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.WatchService;
 import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -57,7 +59,7 @@ import org.junit.runner.RunWith;
 @RunWith(AdvancedRunner.class)
 public class PathWatcherTest
 {
-    public static final int QUIET_TIME = OS.IS_LINUX?300:1000;
+    public static final int QUIET_TIME = OS.IS_LINUX?300:(OS.IS_OSX?5000:1000);
     public static final int WAIT_TIME = 2 * QUIET_TIME;
     public static final int LONG_TIME = 5 * QUIET_TIME;
     

@@ -336,43 +336,43 @@ public class PathWatcher extends AbstractLifeCycle implements Runnable
         {
             try
             {
-                if (excludeHidden && Files.isHidden(path))
+                if (Files.exists(path) && excludeHidden && Files.isHidden(path))
                 {
                     if (LOG.isDebugEnabled())
                         LOG.debug("test({}) -> [Hidden]", path);
                     return false;
                 }
-
-                if (!path.startsWith(this.path))
-                {
-                    if (LOG.isDebugEnabled())
-                        LOG.debug("test({}) -> [!child {}]", path, this.path);
-                    return false;
-                }
-                
-                if (recurseDepth!=UNLIMITED_DEPTH)
-                {
-                    int depth = path.getNameCount() - this.path.getNameCount() - 1;
-                    
-                    if (depth>recurseDepth)
-                    {
-                        if (LOG.isDebugEnabled())
-                            LOG.debug("test({}) -> [depth {}>{}]",path,depth,recurseDepth);
-                        return false;
-                    }
-                }
-                
-                boolean matched = includeExclude.test(path);
-
-                if (LOG.isDebugEnabled())
-                    LOG.debug("test({}) -> {}", path, matched);
-                
-                return matched;
             }
             catch(IOException e)
             {
-                throw new RuntimeException(e);
+                LOG.ignore(e);
             }
+
+            if (!path.startsWith(this.path))
+            {
+                if (LOG.isDebugEnabled())
+                    LOG.debug("test({}) -> [!child {}]", path, this.path);
+                return false;
+            }
+
+            if (recurseDepth!=UNLIMITED_DEPTH)
+            {
+                int depth = path.getNameCount() - this.path.getNameCount() - 1;
+
+                if (depth>recurseDepth)
+                {
+                    if (LOG.isDebugEnabled())
+                        LOG.debug("test({}) -> [depth {}>{}]",path,depth,recurseDepth);
+                    return false;
+                }
+            }
+
+            boolean matched = includeExclude.test(path);
+
+            if (LOG.isDebugEnabled())
+                LOG.debug("test({}) -> {}", path, matched);
+
+            return matched;
         }
 
         /**
@@ -455,15 +455,23 @@ public class PathWatcher extends AbstractLifeCycle implements Runnable
         }
 
 
-        DirAction handleDir(Path path) throws IOException
+        DirAction handleDir(Path path)
         {
-            if (!Files.isDirectory(path))
+            try
+            {
+                if (!Files.isDirectory(path))
+                    return DirAction.IGNORE;
+                if (excludeHidden && Files.isHidden(path))
+                    return DirAction.IGNORE;
+                if (getRecurseDepth()==0)
+                    return DirAction.WATCH;
+                return DirAction.ENTER;
+            }
+            catch(Exception e)
+            {
+                LOG.ignore(e);
                 return DirAction.IGNORE;
-            if (excludeHidden && Files.isHidden(path))
-                return DirAction.IGNORE;
-            if (getRecurseDepth()==0)
-                return DirAction.WATCH;
-            return DirAction.ENTER;
+            }
         }
         
         @Override
