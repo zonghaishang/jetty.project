@@ -1049,7 +1049,6 @@ public class PathWatcher extends AbstractLifeCycle implements Runnable
         }
     }
 
-
     private void registerDir(Path path, Config config) throws IOException
     {
         if (LOG.isDebugEnabled())
@@ -1061,13 +1060,6 @@ public class PathWatcher extends AbstractLifeCycle implements Runnable
         register(path,config.asSubConfig(path),WATCH_DIR_KINDS);
     }
     
-    /**
-     * Register a path (directory) with the WatchService.
-     * 
-     * @param dir the directory to register
-     * @param root the configuration root
-     * @throws IOException if unable to register the path with the watch service.
-     */
     protected void register(Path path, Config config) throws IOException
     {
         if (LOG.isDebugEnabled())
@@ -1076,7 +1068,7 @@ public class PathWatcher extends AbstractLifeCycle implements Runnable
         register(path,config,WATCH_EVENT_KINDS);
     }
 
-    protected void register(Path path, Config config, WatchEvent.Kind<?>[] kinds) throws IOException
+    private void register(Path path, Config config, WatchEvent.Kind<?>[] kinds) throws IOException
     {
         if(watchModifiers != null) 
         {

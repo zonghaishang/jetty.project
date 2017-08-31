@@ -65,12 +65,7 @@ public class PathWatcherTest
     
     static
     {
-        if (OS.IS_LINUX)
-            QUIET_TIME = 300;
-        else if (OS.IS_OSX)
             QUIET_TIME = 5000;
-        else
-            QUIET_TIME = 1000;
         WAIT_TIME = 2 * QUIET_TIME;
         LONG_TIME = 5 * QUIET_TIME;
     }
