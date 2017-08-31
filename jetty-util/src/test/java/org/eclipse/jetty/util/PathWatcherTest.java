@@ -31,11 +31,9 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.nio.file.WatchService;
 import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -65,7 +63,12 @@ public class PathWatcherTest
     
     static
     {
+        if (OS.IS_LINUX)
+            QUIET_TIME = 300;
+        else if (OS.IS_OSX)
             QUIET_TIME = 5000;
+        else
+            QUIET_TIME = 1000;
         WAIT_TIME = 2 * QUIET_TIME;
         LONG_TIME = 5 * QUIET_TIME;
     }
@@ -267,33 +270,24 @@ public class PathWatcherTest
      * @throws InterruptedException
      *             if sleep between writes was interrupted
      */
-    private void updateFileOverTime(Path path, int fileSize, int timeDuration, TimeUnit timeUnit)
+    private void updateFileOverTime(Path path, int timeDuration, TimeUnit timeUnit)
     {
         try
         {
             // how long to sleep between writes
-            int sleepMs = 100;
-
-            // how many millis to spend writing entire file size
-            long totalMs = timeUnit.toMillis(timeDuration);
-
-            // how many write chunks to write
-            int writeCount = (int)((int)totalMs / (int)sleepMs);
+            int sleepMs = 200;
 
             // average chunk buffer
-            int chunkBufLen = fileSize / writeCount;
+            int chunkBufLen = 16;
             byte chunkBuf[] = new byte[chunkBufLen];
             Arrays.fill(chunkBuf, (byte)'x');
-
+            long end = System.nanoTime() + timeUnit.toNanos(timeDuration);
+            
             try (FileOutputStream out = new FileOutputStream(path.toFile()))
             {
-                int left = fileSize;
-
-                while (left > 0)
+                while(System.nanoTime()<end)
                 {
-                    int len = Math.min(left, chunkBufLen);
-                    out.write(chunkBuf, 0, len);
-                    left -= chunkBufLen;
+                    out.write(chunkBuf);
                     out.flush();
                     out.getChannel().force(true);
                     // Force file to actually write to disk.
@@ -364,7 +358,7 @@ public class PathWatcherTest
             expected.put("subdir0/fileA",new PathWatchEventType[] { ADDED });
             expected.put("subdir0/subsubdir0",new PathWatchEventType[] { ADDED });
 
-            capture.finishedLatch.await(5,TimeUnit.SECONDS);
+            capture.finishedLatch.await(LONG_TIME,TimeUnit.MILLISECONDS);
             capture.assertEvents(expected);
             Thread.sleep(WAIT_TIME);
             capture.assertEvents(expected);
@@ -379,7 +373,7 @@ public class PathWatcherTest
             Files.createFile(dir.resolve("subdir0/fileB"));
             expected.put("subdir0/fileB",new PathWatchEventType[] { ADDED });
 
-            capture.finishedLatch.await(5,TimeUnit.SECONDS);
+            capture.finishedLatch.await(LONG_TIME,TimeUnit.MILLISECONDS);
             capture.assertEvents(expected);
             Thread.sleep(WAIT_TIME);
             capture.assertEvents(expected);
@@ -390,7 +384,7 @@ public class PathWatcherTest
             Files.setLastModifiedTime(dir.resolve("subdir0"), FileTime.fromMillis(System.currentTimeMillis()));
             expected.put("subdir0",new PathWatchEventType[] { MODIFIED });
 
-            capture.finishedLatch.await(5,TimeUnit.SECONDS);
+            capture.finishedLatch.await(LONG_TIME,TimeUnit.MILLISECONDS);
             capture.assertEvents(expected);
             Thread.sleep(WAIT_TIME);
             capture.assertEvents(expected);
@@ -402,12 +396,12 @@ public class PathWatcherTest
             updateFile(dir.resolve("file1"),"New Contents");
             expected.put("file1",new PathWatchEventType[] { MODIFIED });
             updateFile(dir.resolve("subdir0/fileB"),"New Contents");
-            capture.finishedLatch.await(5,TimeUnit.SECONDS);
+            capture.finishedLatch.await(LONG_TIME,TimeUnit.MILLISECONDS);
             capture.setFinishTrigger(1);
             updateFile(dir.resolve("subdir0/fileB"),"Newer Contents");
             expected.put("subdir0/fileB",new PathWatchEventType[] { MODIFIED, MODIFIED });
 
-            capture.finishedLatch.await(5,TimeUnit.SECONDS);
+            capture.finishedLatch.await(LONG_TIME,TimeUnit.MILLISECONDS);
             capture.assertEvents(expected);
             Thread.sleep(WAIT_TIME);
             capture.assertEvents(expected);
@@ -416,12 +410,12 @@ public class PathWatcherTest
             capture.reset(1);
             expected.clear();
             long start = System.nanoTime();
-            new Thread(()->{updateFileOverTime(dir.resolve("file1"),20,2,TimeUnit.SECONDS);}).start();
+            new Thread(()->{updateFileOverTime(dir.resolve("file1"),2*QUIET_TIME,TimeUnit.MILLISECONDS);}).start();
             expected.put("file1",new PathWatchEventType[] { MODIFIED });
-            capture.finishedLatch.await(5,TimeUnit.SECONDS);
+            capture.finishedLatch.await(LONG_TIME,TimeUnit.MILLISECONDS);
             long end = System.nanoTime();
             capture.assertEvents(expected);
-            assertThat(end-start,greaterThan(TimeUnit.SECONDS.toNanos(2)));
+            assertThat(end-start,greaterThan(TimeUnit.MILLISECONDS.toNanos(2*QUIET_TIME)));
             Thread.sleep(WAIT_TIME);
             capture.assertEvents(expected);
 
@@ -429,12 +423,12 @@ public class PathWatcherTest
             capture.reset(1);
             expected.clear();
             start = System.nanoTime();
-            new Thread(()->{updateFileOverTime(dir.resolve("file2"),20,2,TimeUnit.SECONDS);}).start();
+            new Thread(()->{updateFileOverTime(dir.resolve("file2"),2*QUIET_TIME,TimeUnit.MILLISECONDS);}).start();
             expected.put("file2",new PathWatchEventType[] { ADDED });
-            capture.finishedLatch.await(5,TimeUnit.SECONDS);
+            capture.finishedLatch.await(LONG_TIME,TimeUnit.MILLISECONDS);
             end = System.nanoTime();
             capture.assertEvents(expected);
-            assertThat(end-start,greaterThan(TimeUnit.SECONDS.toNanos(2)));
+            assertThat(end-start,greaterThan(TimeUnit.MILLISECONDS.toNanos(2*QUIET_TIME)));
             Thread.sleep(WAIT_TIME);
             capture.assertEvents(expected);
 
@@ -450,7 +444,7 @@ public class PathWatcherTest
             expected.put("subdir1/fileB",new PathWatchEventType[] { ADDED });
             expected.put("subdir1/subsubdir0",new PathWatchEventType[] { ADDED });
 
-            capture.finishedLatch.await(5,TimeUnit.SECONDS);
+            capture.finishedLatch.await(LONG_TIME,TimeUnit.MILLISECONDS);
             capture.assertEvents(expected);
             Thread.sleep(WAIT_TIME);
             capture.assertEvents(expected);
@@ -464,7 +458,7 @@ public class PathWatcherTest
             Files.delete(dir.resolve("file2"));
             expected.put("file2",new PathWatchEventType[] { DELETED });
 
-            capture.finishedLatch.await(5,TimeUnit.SECONDS);
+            capture.finishedLatch.await(LONG_TIME,TimeUnit.MILLISECONDS);
             capture.assertEvents(expected);
             Thread.sleep(WAIT_TIME);
             capture.assertEvents(expected);
@@ -1009,12 +1003,12 @@ public class PathWatcherTest
             long start = System.nanoTime();
             new Thread(()->
             {
-                updateFileOverTime(warFile,50 * MB,3,TimeUnit.SECONDS);
+                updateFileOverTime(warFile,2*QUIET_TIME,TimeUnit.MILLISECONDS);
             }).start();
             
-            assertTrue(capture.finishedLatch.await(6,TimeUnit.SECONDS));
+            assertTrue(capture.finishedLatch.await(4*QUIET_TIME,TimeUnit.MILLISECONDS));
             long end = System.nanoTime();
-            assertThat(end-start,greaterThan(TimeUnit.SECONDS.toNanos(3)));
+            assertThat(end-start,greaterThan(TimeUnit.MILLISECONDS.toNanos(2*QUIET_TIME)));
             
 
             Map<String, PathWatchEventType[]> expected = new HashMap<>();
