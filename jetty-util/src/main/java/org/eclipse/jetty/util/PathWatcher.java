@@ -334,24 +334,17 @@ public class PathWatcher extends AbstractLifeCycle implements Runnable
         
         public boolean test(Path path)
         {
-            try
+            if (excludeHidden && isHidden(path))
             {
-                if (Files.exists(path) && excludeHidden && Files.isHidden(path))
-                {
-                    if (LOG.isDebugEnabled())
-                        LOG.debug("test({}) -> [Hidden]", path);
-                    return false;
-                }
-            }
-            catch(IOException e)
-            {
-                LOG.ignore(e);
+                if (LOG.isDebugEnabled())
+                    LOG.debug("test({}) -> [Hidden]", toShortPath(path));
+                return false;
             }
 
             if (!path.startsWith(this.path))
             {
                 if (LOG.isDebugEnabled())
-                    LOG.debug("test({}) -> [!child {}]", path, this.path);
+                    LOG.debug("test({}) -> [!child {}]", toShortPath(path), this.path);
                 return false;
             }
 
@@ -362,7 +355,7 @@ public class PathWatcher extends AbstractLifeCycle implements Runnable
                 if (depth>recurseDepth)
                 {
                     if (LOG.isDebugEnabled())
-                        LOG.debug("test({}) -> [depth {}>{}]",path,depth,recurseDepth);
+                        LOG.debug("test({}) -> [depth {}>{}]",toShortPath(path),depth,recurseDepth);
                     return false;
                 }
             }
@@ -370,7 +363,7 @@ public class PathWatcher extends AbstractLifeCycle implements Runnable
             boolean matched = includeExclude.test(path);
 
             if (LOG.isDebugEnabled())
-                LOG.debug("test({}) -> {}", path, matched);
+                LOG.debug("test({}) -> {}", toShortPath(path), matched);
 
             return matched;
         }
@@ -461,7 +454,7 @@ public class PathWatcher extends AbstractLifeCycle implements Runnable
             {
                 if (!Files.isDirectory(path))
                     return DirAction.IGNORE;
-                if (excludeHidden && Files.isHidden(path))
+                if (excludeHidden && isHidden(path))
                     return DirAction.IGNORE;
                 if (getRecurseDepth()==0)
                     return DirAction.WATCH;
@@ -473,7 +466,36 @@ public class PathWatcher extends AbstractLifeCycle implements Runnable
                 return DirAction.IGNORE;
             }
         }
-        
+
+        public boolean isHidden(Path path)
+        {
+            try
+            {
+                if (!path.startsWith(this.path))
+                    return true;
+                for (int i=this.path.getNameCount(); i<path.getNameCount();i++)
+                {
+                    if (path.getName(i).toString().startsWith("."))
+                    {
+                        return true;
+                    }
+                }
+                return Files.exists(path) && Files.isHidden(path);
+            }
+            catch (IOException e)
+            {
+                LOG.ignore(e);
+                return false;
+            }
+        }
+
+        public String toShortPath(Path path)
+        {
+            if (!path.startsWith(this.path))
+                return path.toString();
+            return this.path.relativize(path).toString();
+        }
+
         @Override
         public String toString()
         {
@@ -486,6 +508,7 @@ public class PathWatcher extends AbstractLifeCycle implements Runnable
             s.append(']');
             return s.toString();
         }
+
     }
     
 
@@ -719,7 +742,7 @@ public class PathWatcher extends AbstractLifeCycle implements Runnable
         }
     }
 
-    private static final Logger LOG = Log.getLogger(PathWatcher.class);
+    static final Logger LOG = Log.getLogger(PathWatcher.class);
 
     @SuppressWarnings("unchecked")
     protected static <T> WatchEvent<T> cast(WatchEvent<?> event)
@@ -1200,8 +1223,12 @@ public class PathWatcher extends AbstractLifeCycle implements Runnable
             Path path = config.resolve(name);
 
             if (LOG.isDebugEnabled())
-                LOG.debug("handleKey? {} {} {}", ev.kind(), path, config);
-            
+                LOG.debug("handleKey? {} {} {}", ev.kind(), config.toShortPath(path), config);
+
+            // Ignore modified events on directories.  These are handled as create/delete events of their contents
+            if (ev.kind()==ENTRY_MODIFY && Files.exists(path) && Files.isDirectory(path))
+                continue;
+
             if (config.test(path))
                 handleWatchEvent(path, new PathWatchEvent(path,ev,config));
             else if (config.getRecurseDepth()==-1)
@@ -1452,8 +1479,5 @@ public class PathWatcher extends AbstractLifeCycle implements Runnable
             return false;
         }
     }
-
-
-
 
 }
