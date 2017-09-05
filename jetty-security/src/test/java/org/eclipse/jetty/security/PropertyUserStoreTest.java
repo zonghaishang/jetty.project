@@ -30,6 +30,7 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.FilePermission;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -242,8 +243,12 @@ public class PropertyUserStoreTest
         userCount.assertThatCount(is(4));
         userCount.assertThatUsers(hasItem("skip"));
         
-        Files.createFile(testdir.getPath().toRealPath().resolve("unrelated.txt"),
-            PosixFilePermissions.asFileAttribute(EnumSet.noneOf(PosixFilePermission.class)));
+        if (OS.IS_LINUX)
+            Files.createFile(testdir.getPath().toRealPath().resolve("unrelated.txt"),
+                PosixFilePermissions.asFileAttribute(EnumSet.noneOf(PosixFilePermission.class)));
+        else
+            Files.createFile(testdir.getPath().toRealPath().resolve("unrelated.txt"));
+        
         Thread.sleep(1100);
         assertThat(loadCount.get(),is(2));
 
