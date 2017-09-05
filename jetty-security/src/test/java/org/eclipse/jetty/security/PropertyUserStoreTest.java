@@ -145,7 +145,7 @@ public class PropertyUserStoreTest
             }
 
         }
-        return "jar:file:" + usersJar.getCanonicalPath() + "!/" + entryPath;
+        return "jar:" + usersJar.toURI().toASCIIString() + "!/" + entryPath;
     }
 
     private void writeUser(File usersFile)
