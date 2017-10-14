@@ -16,25 +16,29 @@
 //  ========================================================================
 //
 
-package org.eclipse.jetty.websocket.core.example.impl;
+package org.eclipse.jetty.websocket.core.server;
 
 import java.util.List;
 
-import javax.servlet.ServletRequest;
-
-import org.eclipse.jetty.io.ByteBufferPool;
 import org.eclipse.jetty.server.Request;
+import org.eclipse.jetty.server.Response;
 import org.eclipse.jetty.websocket.core.WebSocketCoreSession;
 import org.eclipse.jetty.websocket.core.WebSocketPolicy;
 import org.eclipse.jetty.websocket.core.extensions.ExtensionConfig;
+import org.eclipse.jetty.websocket.core.extensions.ExtensionStack;
 
 public interface WebSocketSessionFactory
 {
+    WebSocketPolicy getDefaultPolicy();
+
+    List<ExtensionConfig> negotiate(Request request,
+                                    Response response,
+                                    List<String> offeredSubProtocols,
+                                    List<ExtensionConfig> offeredExtensions);
+
     WebSocketCoreSession newSession(
-            Request baseRequest,
-            ServletRequest request,
-            WebSocketPolicy policy,
-            ByteBufferPool bufferPool,
-            List<ExtensionConfig> extensions,
-            List<String> subprotocols);
+            Request request,
+            Response response,
+            WebSocketPolicy sessionSpecificPolicy,
+            ExtensionStack extensionStack);
 }

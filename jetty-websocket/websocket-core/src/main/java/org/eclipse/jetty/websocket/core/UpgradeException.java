@@ -16,7 +16,7 @@
 //  ========================================================================
 //
 
-package org.eclipse.jetty.websocket.core.handshake;
+package org.eclipse.jetty.websocket.core;
 
 import java.net.URI;
 

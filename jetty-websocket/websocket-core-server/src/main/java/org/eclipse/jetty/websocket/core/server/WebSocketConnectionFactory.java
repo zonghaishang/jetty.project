@@ -16,45 +16,43 @@
 //  ========================================================================
 //
 
-package org.eclipse.jetty.websocket.core.example;
+package org.eclipse.jetty.websocket.core.server;
+
+import java.util.Collections;
+import java.util.List;
 
 import org.eclipse.jetty.io.ByteBufferPool;
+import org.eclipse.jetty.io.Connection;
 import org.eclipse.jetty.io.EndPoint;
-import org.eclipse.jetty.io.MappedByteBufferPool;
+import org.eclipse.jetty.server.ConnectionFactory;
 import org.eclipse.jetty.server.Connector;
-import org.eclipse.jetty.util.component.ContainerLifeCycle;
-import org.eclipse.jetty.websocket.core.WebSocketBehavior;
 import org.eclipse.jetty.websocket.core.WebSocketCoreSession;
 import org.eclipse.jetty.websocket.core.WebSocketPolicy;
-import org.eclipse.jetty.websocket.core.extensions.WebSocketExtensionRegistry;
 import org.eclipse.jetty.websocket.core.io.WebSocketCoreConnection;
-import org.eclipse.jetty.websocket.core.example.impl.WebSocketConnectionFactory;
 
-class ExampleWebSocketConnectionFactory extends ContainerLifeCycle implements WebSocketConnectionFactory
+public interface WebSocketConnectionFactory extends ConnectionFactory
 {
-    WebSocketExtensionRegistry extensionRegistry = new WebSocketExtensionRegistry();
-    WebSocketPolicy policy = new WebSocketPolicy(WebSocketBehavior.SERVER,extensionRegistry);
-    ByteBufferPool bufferPool = new MappedByteBufferPool();
+    WebSocketPolicy getPolicy();
+
+    WebSocketCoreConnection newConnection(Connector connector, EndPoint endPoint, WebSocketCoreSession session);
 
     @Override
-    public WebSocketPolicy getPolicy()
+    default Connection newConnection(Connector connector, EndPoint endPoint)
     {
-        return policy;
+        throw new UnsupportedOperationException();
     }
 
     @Override
-    public WebSocketCoreConnection newConnection(Connector connector, EndPoint endPoint, WebSocketCoreSession session)
+    default String getProtocol()
     {
-        return new WebSocketCoreConnection(
-                endPoint,
-                connector.getExecutor(),
-                bufferPool,
-                session);
+        return "ws";
     }
 
     @Override
-    public ByteBufferPool getBufferPool()
+    default List<String> getProtocols()
     {
-        return bufferPool;
+        return Collections.singletonList(getProtocol());
     }
+
+    ByteBufferPool getBufferPool();
 }

@@ -16,21 +16,22 @@
 //  ========================================================================
 //
 
-package org.eclipse.jetty.websocket.core.example.impl;
+package org.eclipse.jetty.websocket.core.server;
 
-import javax.servlet.ServletContext;
+import java.io.IOException;
 
-import org.eclipse.jetty.server.Connector;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 
-public final class ContextConnectorConfiguration
+public interface OpeningHandshake
 {
-    public static <T> T lookup(Class<T> clazz, ServletContext context, Connector connector)
-    {
-        T t = null;
-        if (context!=null)
-            t = (T)context.getAttribute(clazz.getCanonicalName());
-        if (t==null)
-            t = connector.getBean(clazz);
-        return t;
-    }
+    /**
+     * Perform an Upgrade of a Request to WebSocket.
+     *
+     * @param request the received request
+     * @param response the pending response
+     * @return true if upgrade occurred
+     * @throws IOException
+     */
+    boolean upgrade(HttpServletRequest request, HttpServletResponse response) throws IOException;
 }

@@ -16,16 +16,15 @@
 //  ========================================================================
 //
 
-package org.eclipse.jetty.websocket.core.example.impl;
+package org.eclipse.jetty.websocket.core.server;
 
-import java.io.IOException;
+import org.eclipse.jetty.websocket.core.OutgoingFrames;
+import org.eclipse.jetty.websocket.core.io.WebSocketRemoteEndpointImpl;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
-import org.eclipse.jetty.server.Request;
-
-public interface Handshaker
+class ExampleRemoteEndpoint extends WebSocketRemoteEndpointImpl
 {
-    boolean upgradeRequest(Request baseRequest, HttpServletRequest request, HttpServletResponse response) throws IOException;
+    public ExampleRemoteEndpoint(OutgoingFrames outgoing)
+    {
+        super(outgoing);
+    }
 }

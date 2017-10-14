@@ -43,7 +43,7 @@ import org.eclipse.jetty.websocket.client.ClientUpgradeRequest;
 import org.eclipse.jetty.websocket.client.WebSocketClient;
 import org.eclipse.jetty.websocket.client.WebSocketUpgradeRequest;
 import org.eclipse.jetty.websocket.core.handshake.AcceptHash;
-import org.eclipse.jetty.websocket.core.handshake.UpgradeException;
+import org.eclipse.jetty.websocket.core.UpgradeException;
 import org.eclipse.jetty.websocket.tests.Defaults;
 import org.eclipse.jetty.websocket.tests.TrackingEndpoint;
 import org.eclipse.jetty.websocket.tests.UntrustedWSEndpoint;

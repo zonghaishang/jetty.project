@@ -16,7 +16,7 @@
 //  ========================================================================
 //
 
-package org.eclipse.jetty.websocket.core.example;
+package org.eclipse.jetty.websocket.core.server;
 
 import java.io.IOException;
 
@@ -30,8 +30,7 @@ import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.handler.HandlerWrapper;
 import org.eclipse.jetty.util.log.Log;
 import org.eclipse.jetty.util.log.Logger;
-import org.eclipse.jetty.websocket.core.example.impl.Handshaker;
-import org.eclipse.jetty.websocket.core.example.impl.RFC6455Handshaker;
+import org.eclipse.jetty.websocket.core.server.handshake.RFC6455OpeningHandshake;
 
 public class ExampleWebSocketHandler extends HandlerWrapper
 {
@@ -40,19 +39,21 @@ public class ExampleWebSocketHandler extends HandlerWrapper
     @Override
     public void handle(String target, Request baseRequest, HttpServletRequest request, HttpServletResponse response) throws IOException, ServletException
     {
-        Handshaker handshaker = getHandshaker(baseRequest);
+        OpeningHandshake openingHandshake = getOpeningHandshakeImpl(baseRequest);
         if (LOG.isDebugEnabled())
-            LOG.debug("handle {} handshaker={}",baseRequest,handshaker);
-        if (handshaker!=null && handshaker.upgradeRequest(baseRequest, request, response))
+            LOG.debug("handle {} openingHandshake={}", baseRequest, openingHandshake);
+
+        if (openingHandshake != null && openingHandshake.upgrade(request, response))
             return;
-        super.handle(target,baseRequest,request,response);
+
+        super.handle(target, baseRequest, request, response);
     }
 
-    protected Handshaker getHandshaker(Request baseRequest)
+    protected OpeningHandshake getOpeningHandshakeImpl(Request baseRequest)
     {
         HttpField version = baseRequest.getHttpFields().getField(HttpHeader.SEC_WEBSOCKET_VERSION);
-        if (version !=null && version.getIntValue()== RFC6455Handshaker.VERSION)
-            return new RFC6455Handshaker();
+        if (version != null && version.getIntValue() == RFC6455OpeningHandshake.VERSION)
+            return new RFC6455OpeningHandshake();
         return null;
     }
 }

@@ -16,37 +16,58 @@
 //  ========================================================================
 //
 
-package org.eclipse.jetty.websocket.core.example;
+package org.eclipse.jetty.websocket.core.server;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
-import javax.servlet.ServletRequest;
-
-import org.eclipse.jetty.io.ByteBufferPool;
 import org.eclipse.jetty.server.Request;
-import org.eclipse.jetty.util.DecoratedObjectFactory;
+import org.eclipse.jetty.server.Response;
 import org.eclipse.jetty.websocket.core.WebSocketCoreSession;
 import org.eclipse.jetty.websocket.core.WebSocketPolicy;
-import org.eclipse.jetty.websocket.core.example.impl.WebSocketSessionFactory;
 import org.eclipse.jetty.websocket.core.extensions.ExtensionConfig;
 import org.eclipse.jetty.websocket.core.extensions.ExtensionStack;
 
 class ExampleWebSocketSessionFactory implements WebSocketSessionFactory
 {
-    DecoratedObjectFactory objectFactory = new DecoratedObjectFactory();
+    private final WebSocketPolicy defaultSessionPolicy;
+
+    public ExampleWebSocketSessionFactory(WebSocketPolicy policy)
+    {
+        this.defaultSessionPolicy = policy.clonePolicy();
+    }
 
     @Override
-    public WebSocketCoreSession newSession(Request baseRequest, ServletRequest request, WebSocketPolicy policy,
-                                           ByteBufferPool bufferPool, List<ExtensionConfig> extensions, List<String> subprotocols)
+    public WebSocketPolicy getDefaultPolicy()
     {
-        ExtensionStack extensionStack = new ExtensionStack(policy.getExtensionRegistry());
-        extensionStack.negotiate(objectFactory, policy, bufferPool, extensions);
+        return this.defaultSessionPolicy;
+    }
 
+    @Override
+    public List<ExtensionConfig> negotiate(Request request,
+                                           Response response,
+                                           List<String> offeredSubProtocols,
+                                           List<ExtensionConfig> offeredExtensions)
+    {
+        // Example: Filter out a specific extension by name.
+        List<ExtensionConfig> filteredExtensions = offeredExtensions.stream()
+                .filter((config) -> !config.getName().equalsIgnoreCase("premessage-deflate"))
+                .collect(Collectors.toList());
+
+        return filteredExtensions;
+    }
+
+    @Override
+    public WebSocketCoreSession newSession(Request request,
+                                           Response response,
+                                           WebSocketPolicy sessionPolicy,
+                                           ExtensionStack extensionStack)
+    {
         ExampleLocalEndpoint localEndpoint = new ExampleLocalEndpoint();
         ExampleRemoteEndpoint remoteEndpoint = new ExampleRemoteEndpoint(extensionStack);
 
         WebSocketCoreSession session =
-                new WebSocketCoreSession(localEndpoint,remoteEndpoint,policy,extensionStack);
+                new WebSocketCoreSession(localEndpoint,remoteEndpoint,sessionPolicy,extensionStack);
 
         localEndpoint.setSession(session);
         return session;

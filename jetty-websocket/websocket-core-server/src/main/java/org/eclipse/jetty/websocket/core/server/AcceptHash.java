@@ -16,7 +16,7 @@
 //  ========================================================================
 //
 
-package org.eclipse.jetty.websocket.core.handshake;
+package org.eclipse.jetty.websocket.core.server;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;

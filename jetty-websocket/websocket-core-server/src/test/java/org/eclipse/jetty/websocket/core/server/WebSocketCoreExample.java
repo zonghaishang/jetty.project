@@ -16,7 +16,7 @@
 //  ========================================================================
 //
 
-package org.eclipse.jetty.websocket.core.example;
+package org.eclipse.jetty.websocket.core.server;
 
 import java.io.IOException;
 
@@ -30,7 +30,7 @@ import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.server.handler.AbstractHandler;
 import org.eclipse.jetty.server.handler.ContextHandler;
-import org.eclipse.jetty.websocket.core.example.impl.WebSocketSessionFactory;
+import org.eclipse.jetty.websocket.core.WebSocketPolicy;
 
 public class WebSocketCoreExample
 {
@@ -49,7 +49,9 @@ public class WebSocketCoreExample
 
         ContextHandler context = new ContextHandler("/");
         server.setHandler(context);
-        context.setAttribute(WebSocketSessionFactory.class.getName(), new ExampleWebSocketSessionFactory());
+
+        WebSocketPolicy defaultSessionPolicy = WebSocketPolicy.newServerPolicy();
+        context.setAttribute(WebSocketSessionFactory.class.getName(), new ExampleWebSocketSessionFactory(defaultSessionPolicy));
 
         ExampleWebSocketHandler handler = new ExampleWebSocketHandler();
         context.setHandler(handler);

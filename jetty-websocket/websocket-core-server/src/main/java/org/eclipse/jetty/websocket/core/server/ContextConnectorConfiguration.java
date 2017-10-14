@@ -16,16 +16,21 @@
 //  ========================================================================
 //
 
-package org.eclipse.jetty.websocket.core.example;
+package org.eclipse.jetty.websocket.core.server;
 
-import org.eclipse.jetty.websocket.core.OutgoingFrames;
-import org.eclipse.jetty.websocket.core.WebSocketSessionState;
-import org.eclipse.jetty.websocket.core.io.WebSocketRemoteEndpointImpl;
+import javax.servlet.ServletContext;
 
-class ExampleRemoteEndpoint extends WebSocketRemoteEndpointImpl
+import org.eclipse.jetty.server.Connector;
+
+public final class ContextConnectorConfiguration
 {
-    public ExampleRemoteEndpoint(OutgoingFrames outgoing)
+    public static <T> T lookup(Class<T> clazz, ServletContext context, Connector connector)
     {
-        super(outgoing);
+        T t = null;
+        if (context!=null)
+            t = (T)context.getAttribute(clazz.getCanonicalName());
+        if (t==null)
+            t = connector.getBean(clazz);
+        return t;
     }
 }
