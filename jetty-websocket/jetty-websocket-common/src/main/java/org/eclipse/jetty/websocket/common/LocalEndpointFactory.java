@@ -44,6 +44,8 @@ import org.eclipse.jetty.websocket.api.listeners.WebSocketFrameListener;
 import org.eclipse.jetty.websocket.api.listeners.WebSocketListener;
 import org.eclipse.jetty.websocket.api.listeners.WebSocketPartialListener;
 import org.eclipse.jetty.websocket.api.listeners.WebSocketPingPongListener;
+import org.eclipse.jetty.websocket.common.invoke.InvalidSignatureException;
+import org.eclipse.jetty.websocket.common.invoke.InvokerUtils;
 import org.eclipse.jetty.websocket.common.message.ByteArrayMessageSink;
 import org.eclipse.jetty.websocket.common.message.ByteBufferMessageSink;
 import org.eclipse.jetty.websocket.common.message.InputStreamMessageSink;
@@ -51,12 +53,10 @@ import org.eclipse.jetty.websocket.common.message.PartialBinaryMessageSink;
 import org.eclipse.jetty.websocket.common.message.PartialTextMessageSink;
 import org.eclipse.jetty.websocket.common.message.ReaderMessageSink;
 import org.eclipse.jetty.websocket.common.message.StringMessageSink;
+import org.eclipse.jetty.websocket.common.util.ReflectUtils;
 import org.eclipse.jetty.websocket.core.Frame;
 import org.eclipse.jetty.websocket.core.InvalidWebSocketException;
 import org.eclipse.jetty.websocket.core.WebSocketPolicy;
-import org.eclipse.jetty.websocket.core.invoke.InvalidSignatureException;
-import org.eclipse.jetty.websocket.core.invoke.InvokerUtils;
-import org.eclipse.jetty.websocket.core.util.ReflectUtils;
 
 public class LocalEndpointFactory
 {

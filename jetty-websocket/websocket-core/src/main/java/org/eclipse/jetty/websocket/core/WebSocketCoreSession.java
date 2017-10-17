@@ -122,6 +122,11 @@ public class WebSocketCoreSession extends ContainerLifeCycle implements Incoming
         return policy;
     }
 
+    public WebSocketSessionState getSessionState()
+    {
+        return this.state;
+    }
+
     /**
      * Process an Error event seen by the Session and/or Connection
      *

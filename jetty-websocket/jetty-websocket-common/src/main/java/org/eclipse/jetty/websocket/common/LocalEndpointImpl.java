@@ -70,8 +70,7 @@ public class LocalEndpointImpl implements WebSocketLocalEndpoint
         this.pongHandle = pongHandle;
     }
 
-    @Override
-    public Logger getLog()
+    public Logger getEndpointLogger()
     {
         return this.log;
     }
@@ -79,17 +78,6 @@ public class LocalEndpointImpl implements WebSocketLocalEndpoint
     public WebSocketPolicy getPolicy()
     {
         return policy;
-    }
-
-    public Object getEndpointInstance()
-    {
-        return endpointInstance;
-    }
-
-    @Override
-    public boolean isOpen()
-    {
-        return open.get();
     }
 
     @Override

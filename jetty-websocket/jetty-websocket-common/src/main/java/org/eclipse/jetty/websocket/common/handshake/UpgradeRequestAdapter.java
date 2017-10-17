@@ -16,7 +16,7 @@
 //  ========================================================================
 //
 
-package org.eclipse.jetty.websocket.common;
+package org.eclipse.jetty.websocket.common.handshake;
 
 import java.net.HttpCookie;
 import java.net.URI;

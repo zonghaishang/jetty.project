@@ -64,7 +64,6 @@ public class WebSocketCoreConnection extends AbstractConnection implements Parse
     private final WebSocketPolicy policy;
     private final AtomicBoolean suspendToken;
     private final Flusher flusher;
-    private final String id;
 
     private WebSocketCoreSession session;
 
@@ -92,13 +91,6 @@ public class WebSocketCoreConnection extends AbstractConnection implements Parse
         Objects.requireNonNull(bufferPool, "ByteBufferPool");
 
         this.bufferPool = bufferPool;
-
-        this.id = String.format("%s:%d->%s:%d",
-                endp.getLocalAddress().getAddress().getHostAddress(),
-                endp.getLocalAddress().getPort(),
-                endp.getRemoteAddress().getAddress().getHostAddress(),
-                endp.getRemoteAddress().getPort());
-
         this.policy = session.getPolicy();
         this.session = session;
 
@@ -119,7 +111,6 @@ public class WebSocketCoreConnection extends AbstractConnection implements Parse
         return super.getExecutor();
     }
 
-
     public void disconnect()
     {
         if (LOG.isDebugEnabled())
@@ -139,11 +130,6 @@ public class WebSocketCoreConnection extends AbstractConnection implements Parse
     public Generator getGenerator()
     {
         return generator;
-    }
-
-    public String getId()
-    {
-        return id;
     }
 
     public long getIdleTimeout()
@@ -170,7 +156,6 @@ public class WebSocketCoreConnection extends AbstractConnection implements Parse
     {
         return getEndPoint().getRemoteAddress();
     }
-
 
     /**
      * Physical connection disconnect.

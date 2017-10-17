@@ -42,6 +42,8 @@ import org.eclipse.jetty.util.DecoratedObjectFactory;
 import org.eclipse.jetty.util.IO;
 import org.eclipse.jetty.websocket.api.Session;
 import org.eclipse.jetty.websocket.api.StatusCode;
+import org.eclipse.jetty.websocket.api.UpgradeRequest;
+import org.eclipse.jetty.websocket.api.UpgradeResponse;
 import org.eclipse.jetty.websocket.api.annotations.OnWebSocketMessage;
 import org.eclipse.jetty.websocket.api.annotations.WebSocket;
 import org.eclipse.jetty.websocket.api.listeners.WebSocketConnectionListener;
@@ -104,13 +106,13 @@ public class LocalEndpointImplTest
         UpgradeRequest upgradeRequest = new UpgradeRequestAdapter();
         UpgradeResponse upgradeResponse = new UpgradeResponseAdapter();
 
-        WebSocketCoreConnection connection = new WebSocketCoreConnection(jettyEndpoint, executor, bufferPool, objectFactory,
-                policy, extensionStack, upgradeRequest, upgradeResponse);
 
-        WebSocketSessionImpl session = new WebSocketSessionImpl(container, connection);
 
         LocalEndpointImpl localEndpoint = endpointFactory.createLocalEndpoint(wsEndpoint, session, policy, executor);
-        session.setWebSocketEndpoint(wsEndpoint, policy, localEndpoint, new RemoteEndpointImpl(extensionStack, connection.getRemoteAddress()));
+        RemoteEndpointImpl remoteEndpoint =new RemoteEndpointImpl(extensionStack, connection.getRemoteAddress());
+
+        WebSocketSessionImpl session = new WebSocketSessionImpl(localEndpoint, remoteEndpoint, policy, extensionStack, upgradeRequest, upgradeResponse);
+        WebSocketCoreConnection connection = new WebSocketCoreConnection(jettyEndpoint, executor, bufferPool, session);
 
         return localEndpoint;
     }

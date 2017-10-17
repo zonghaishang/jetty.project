@@ -23,28 +23,40 @@ import java.net.InetSocketAddress;
 import java.util.concurrent.CompletableFuture;
 
 import org.eclipse.jetty.util.Callback;
-import org.eclipse.jetty.util.component.ContainerLifeCycle;
-import org.eclipse.jetty.websocket.api.RemoteEndpoint;
 import org.eclipse.jetty.websocket.api.Session;
 import org.eclipse.jetty.websocket.api.StatusCode;
+import org.eclipse.jetty.websocket.api.UpgradeRequest;
+import org.eclipse.jetty.websocket.api.UpgradeResponse;
 import org.eclipse.jetty.websocket.core.CloseStatus;
 import org.eclipse.jetty.websocket.core.WebSocketConstants;
 import org.eclipse.jetty.websocket.core.WebSocketCoreSession;
+import org.eclipse.jetty.websocket.core.WebSocketLocalEndpoint;
 import org.eclipse.jetty.websocket.core.WebSocketPolicy;
+import org.eclipse.jetty.websocket.core.WebSocketRemoteEndpoint;
+import org.eclipse.jetty.websocket.core.extensions.ExtensionStack;
 import org.eclipse.jetty.websocket.core.io.SuspendToken;
-import org.eclipse.jetty.websocket.core.io.WebSocketCoreConnection;
 
-public class WebSocketSessionImpl<
-        P extends ContainerLifeCycle,
-        C extends WebSocketCoreConnection,
-        L extends LocalEndpointImpl,
-        R extends RemoteEndpointImpl>
-        extends WebSocketCoreSession<P,C,L,R> implements Session
+public class WebSocketSessionImpl extends WebSocketCoreSession implements Session
 {
-    public WebSocketSessionImpl(P container, C connection)
+    private final UpgradeRequest upgradeRequest;
+    private final UpgradeResponse upgradeResponse;
+
+    public WebSocketSessionImpl(WebSocketLocalEndpoint localEndpoint,
+                                WebSocketRemoteEndpoint remoteEndpoint,
+                                WebSocketPolicy policy,
+                                ExtensionStack extensionStack,
+                                UpgradeRequest upgradeRequest,
+                                UpgradeResponse upgradeResponse)
     {
-        super(container, connection);
-        connection.setSession(this);
+        super(localEndpoint, remoteEndpoint, policy, extensionStack);
+        this.upgradeRequest = upgradeRequest;
+        this.upgradeResponse = upgradeResponse;
+    }
+
+    @Override
+    public LocalEndpointImpl getLocal()
+    {
+        return (LocalEndpointImpl) super.getLocal();
     }
 
     public void setFuture(CompletableFuture<Session> fut)
@@ -53,34 +65,20 @@ public class WebSocketSessionImpl<
     }
 
     @Override
-    public void setWebSocketEndpoint(Object endpoint, WebSocketPolicy policy, L localEndpoint, R remoteEndpoint)
-    {
-        super.setWebSocketEndpoint(endpoint, policy, localEndpoint, remoteEndpoint);
-    }
-
-    private void closeRemote()
-    {
-        remoteEndpoint.close();
-    }
-
-    @Override
     public void close()
     {
-        closeRemote();
         super.close(WebSocketConstants.NORMAL, null, Callback.NOOP);
     }
 
     @Override
     public void close(CloseStatus closeStatus)
     {
-        closeRemote();
         super.close(closeStatus, Callback.NOOP);
     }
 
     @Override
     public void close(int statusCode, String reason)
     {
-        closeRemote();
         super.close(statusCode, reason, Callback.NOOP);
     }
 
@@ -115,9 +113,9 @@ public class WebSocketSessionImpl<
     }
 
     @Override
-    public RemoteEndpoint getRemote()
+    public RemoteEndpointImpl getRemote()
     {
-        return remoteEndpoint;
+        return (RemoteEndpointImpl) super.getRemote();
     }
 
     @Override
@@ -129,32 +127,35 @@ public class WebSocketSessionImpl<
     @Override
     public UpgradeRequest getUpgradeRequest()
     {
-        return getConnection().getUpgradeRequest();
+        return this.upgradeRequest;
     }
 
     @Override
     public UpgradeResponse getUpgradeResponse()
     {
-        return getConnection().getUpgradeResponse();
+        return this.upgradeResponse;
     }
 
     @Override
     public boolean isOpen()
     {
-        return getConnection().isOpen();
+        return getSessionState().isOpen();
     }
 
     @Override
     public boolean isSecure()
     {
-        return getConnection().isSecure();
+        // TODO: get "is secure" from HttpServletRequest? or Connection? or Jetty EndPoint?
+        String scheme = getUpgradeRequest().getRequestURI().getScheme();
+        return "wss".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme);
     }
 
     @Override
     public void onOpen()
     {
-        remoteEndpoint.open();
+        // TODO: [EVENT] before onOpen
         super.onOpen();
+        // TODO: [EVENT] after onOpen (potentially successful, how do we determine if in error?)
     }
 
     @Override

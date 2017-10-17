@@ -29,10 +29,10 @@ import org.eclipse.jetty.util.SharedBlockingCallback;
 import org.eclipse.jetty.util.log.Log;
 import org.eclipse.jetty.util.log.Logger;
 import org.eclipse.jetty.websocket.api.WriteCallback;
+import org.eclipse.jetty.websocket.common.util.Utf8CharBuffer;
+import org.eclipse.jetty.websocket.core.OutgoingFrames;
 import org.eclipse.jetty.websocket.core.frames.TextFrame;
 import org.eclipse.jetty.websocket.core.io.BatchMode;
-import org.eclipse.jetty.websocket.core.OutgoingFrames;
-import org.eclipse.jetty.websocket.core.util.Utf8CharBuffer;
 
 /**
  * Support for writing a single WebSocket TEXT message via a {@link Writer}
