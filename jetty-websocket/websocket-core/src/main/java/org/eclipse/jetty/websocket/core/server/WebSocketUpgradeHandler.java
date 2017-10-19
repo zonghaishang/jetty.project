@@ -30,30 +30,26 @@ import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.handler.HandlerWrapper;
 import org.eclipse.jetty.util.log.Log;
 import org.eclipse.jetty.util.log.Logger;
-import org.eclipse.jetty.websocket.core.server.handshake.RFC6455OpeningHandshake;
 
-public class ExampleWebSocketHandler extends HandlerWrapper
+public class WebSocketUpgradeHandler extends HandlerWrapper
 {
-    final static Logger LOG = Log.getLogger(ExampleWebSocketHandler.class);
+    final static Logger LOG = Log.getLogger(WebSocketUpgradeHandler.class);
 
     @Override
     public void handle(String target, Request baseRequest, HttpServletRequest request, HttpServletResponse response) throws IOException, ServletException
     {
-        OpeningHandshake openingHandshake = getOpeningHandshakeImpl(baseRequest);
+        Handshaker handshaker = getHandshaker(baseRequest);
         if (LOG.isDebugEnabled())
-            LOG.debug("handle {} openingHandshake={}", baseRequest, openingHandshake);
-
-        if (openingHandshake != null && openingHandshake.upgrade(request, response))
+            LOG.debug("handle {} handshaker={}",baseRequest,handshaker);
+        if (handshaker!=null && handshaker.upgradeRequest(baseRequest, request, response))
             return;
-
-        super.handle(target, baseRequest, request, response);
+        if (!baseRequest.isHandled())
+            super.handle(target,baseRequest,request,response);
     }
 
-    protected OpeningHandshake getOpeningHandshakeImpl(Request baseRequest)
+    protected Handshaker getHandshaker(Request baseRequest)
     {
-        HttpField version = baseRequest.getHttpFields().getField(HttpHeader.SEC_WEBSOCKET_VERSION);
-        if (version != null && version.getIntValue() == RFC6455OpeningHandshake.VERSION)
-            return new RFC6455OpeningHandshake();
-        return null;
+        // TODO This needs to be a factory so a handshaker can be obtained for either HTTP/1 or HTTP/2
+        return baseRequest.getHttpChannel().getConnector().getBean(Handshaker.class);
     }
 }

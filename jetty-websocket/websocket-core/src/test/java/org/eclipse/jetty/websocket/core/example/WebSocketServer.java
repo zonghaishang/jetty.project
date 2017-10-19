@@ -16,7 +16,7 @@
 //  ========================================================================
 //
 
-package org.eclipse.jetty.websocket.core.server;
+package org.eclipse.jetty.websocket.core.example;
 
 import java.io.IOException;
 
@@ -30,9 +30,13 @@ import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.server.handler.AbstractHandler;
 import org.eclipse.jetty.server.handler.ContextHandler;
+import org.eclipse.jetty.websocket.core.WebSocketBehavior;
 import org.eclipse.jetty.websocket.core.WebSocketPolicy;
+import org.eclipse.jetty.websocket.core.server.FrameHandlerFactory;
+import org.eclipse.jetty.websocket.core.server.RFC6455Handshaker;
+import org.eclipse.jetty.websocket.core.server.WebSocketUpgradeHandler;
 
-public class WebSocketCoreExample
+public class WebSocketServer
 {
     public static void main(String[] args) throws Exception
     {
@@ -40,20 +44,19 @@ public class WebSocketCoreExample
 
         ServerConnector connector = new ServerConnector(
                 server,
-                new HttpConnectionFactory(),
-                new ExampleWebSocketConnectionFactory()
+                new HttpConnectionFactory()
         );
+        connector.addBean(new WebSocketPolicy(WebSocketBehavior.SERVER));
+        connector.addBean(new RFC6455Handshaker());
 
         connector.setPort(8080);
         server.addConnector(connector);
 
         ContextHandler context = new ContextHandler("/");
         server.setHandler(context);
+        context.setAttribute(FrameHandlerFactory.class.getName(), new ExampleFrameHandlerFactory());
 
-        WebSocketPolicy defaultSessionPolicy = WebSocketPolicy.newServerPolicy();
-        context.setAttribute(WebSocketSessionFactory.class.getName(), new ExampleWebSocketSessionFactory(defaultSessionPolicy));
-
-        ExampleWebSocketHandler handler = new ExampleWebSocketHandler();
+        WebSocketUpgradeHandler handler = new WebSocketUpgradeHandler();
         context.setHandler(handler);
         handler.setHandler(new AbstractHandler()
         {

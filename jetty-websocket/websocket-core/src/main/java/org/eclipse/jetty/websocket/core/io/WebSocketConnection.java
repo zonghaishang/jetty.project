@@ -40,14 +40,14 @@ import org.eclipse.jetty.websocket.core.Frame;
 import org.eclipse.jetty.websocket.core.Generator;
 import org.eclipse.jetty.websocket.core.OutgoingFrames;
 import org.eclipse.jetty.websocket.core.Parser;
-import org.eclipse.jetty.websocket.core.WebSocketCoreSession;
+import org.eclipse.jetty.websocket.core.WebSocketChannel;
 import org.eclipse.jetty.websocket.core.WebSocketPolicy;
 import org.eclipse.jetty.websocket.core.WebSocketTimeoutException;
 
 /**
  * Provides the implementation of {@link org.eclipse.jetty.io.Connection} that is suitable for WebSocket
  */
-public class WebSocketCoreConnection extends AbstractConnection implements Parser.Handler, SuspendToken, Connection.UpgradeTo, Dumpable, OutgoingFrames
+public class WebSocketConnection extends AbstractConnection implements Parser.Handler, SuspendToken, Connection.UpgradeTo, Dumpable, OutgoingFrames
 {
     private final Logger LOG = Log.getLogger(this.getClass());
 
@@ -64,8 +64,9 @@ public class WebSocketCoreConnection extends AbstractConnection implements Parse
     private final WebSocketPolicy policy;
     private final AtomicBoolean suspendToken;
     private final Flusher flusher;
+    private final String id;
 
-    private WebSocketCoreSession session;
+    private WebSocketChannel channel;
 
     // Read / Parse variables
     private AtomicBoolean fillAndParseScope = new AtomicBoolean(false);
@@ -78,21 +79,28 @@ public class WebSocketCoreConnection extends AbstractConnection implements Parse
      * completed successfully before creating this connection.
      * </p>
      */
-    public WebSocketCoreConnection(EndPoint endp,
-                                   Executor executor,
-                                   ByteBufferPool bufferPool,
-                                   WebSocketCoreSession session)
+    public WebSocketConnection(EndPoint endp,
+                               Executor executor,
+                               ByteBufferPool bufferPool,
+                               WebSocketChannel channel)
     {
         super(endp, executor);
 
         Objects.requireNonNull(endp, "EndPoint");
-        Objects.requireNonNull(session, "Session");
+        Objects.requireNonNull(channel, "Channel");
         Objects.requireNonNull(executor, "Executor");
         Objects.requireNonNull(bufferPool, "ByteBufferPool");
 
         this.bufferPool = bufferPool;
-        this.policy = session.getPolicy();
-        this.session = session;
+
+        this.id = String.format("%s:%d->%s:%d",
+                endp.getLocalAddress().getAddress().getHostAddress(),
+                endp.getLocalAddress().getPort(),
+                endp.getRemoteAddress().getAddress().getHostAddress(),
+                endp.getRemoteAddress().getPort());
+
+        this.policy = channel.getPolicy();
+        this.channel = channel;
 
         this.generator = new Generator(policy, bufferPool);
         this.parser = new Parser(policy, bufferPool, this);
@@ -101,8 +109,8 @@ public class WebSocketCoreConnection extends AbstractConnection implements Parse
         this.setInputBufferSize(policy.getInputBufferSize());
         this.setMaxIdleTimeout(policy.getIdleTimeout());
 
-        this.parser.configureFromExtensions(session.getExtensionStack().getExtensions());
-        this.generator.configureFromExtensions(session.getExtensionStack().getExtensions());
+        this.parser.configureFromExtensions(channel.getExtensionStack().getExtensions());
+        this.generator.configureFromExtensions(channel.getExtensionStack().getExtensions());
     }
 
     @Override
@@ -110,6 +118,7 @@ public class WebSocketCoreConnection extends AbstractConnection implements Parse
     {
         return super.getExecutor();
     }
+
 
     public void disconnect()
     {
@@ -130,6 +139,11 @@ public class WebSocketCoreConnection extends AbstractConnection implements Parse
     public Generator getGenerator()
     {
         return generator;
+    }
+
+    public String getId()
+    {
+        return id;
     }
 
     public long getIdleTimeout()
@@ -157,6 +171,7 @@ public class WebSocketCoreConnection extends AbstractConnection implements Parse
         return getEndPoint().getRemoteAddress();
     }
 
+
     /**
      * Physical connection disconnect.
      * <p>
@@ -178,7 +193,7 @@ public class WebSocketCoreConnection extends AbstractConnection implements Parse
         if (LOG.isDebugEnabled())
             LOG.debug("onIdleExpired()");
 
-        session.processError(new WebSocketTimeoutException("Connection Idle Timeout"));
+        channel.processError(new WebSocketTimeoutException("Connection Idle Timeout"));
         return true;
     }
 
@@ -190,7 +205,7 @@ public class WebSocketCoreConnection extends AbstractConnection implements Parse
         if (LOG.isDebugEnabled())
             LOG.debug("onFrame({})", frame);
 
-        session.getExtensionStack().incomingFrame(frame, new Callback()
+        channel.incomingFrame(frame, new Callback()
         {
             @Override
             public void succeeded()
@@ -214,7 +229,7 @@ public class WebSocketCoreConnection extends AbstractConnection implements Parse
                 parser.release(frame);
 
                 // notify session & endpoint
-                session.processError(cause);
+                channel.processError(cause);
             }
         });
 
@@ -277,9 +292,10 @@ public class WebSocketCoreConnection extends AbstractConnection implements Parse
 
     private void fillAndParse()
     {
+        if(!fillAndParseScope.compareAndSet(false,true))
+            return;
         try
         {
-            fillAndParseScope.set(true);
             while (getEndPoint().isOpen())
             {
                 if (suspendToken.get())
@@ -289,7 +305,10 @@ public class WebSocketCoreConnection extends AbstractConnection implements Parse
 
                 ByteBuffer nBuffer = getNetworkBuffer();
 
-                if (!parser.parse(nBuffer)) return;
+                if (!parser.parse(nBuffer)) 
+                {
+                    return;
+                }
 
                 // Shouldn't reach this point if buffer has un-parsed bytes
                 assert (!nBuffer.hasRemaining());
@@ -315,7 +334,7 @@ public class WebSocketCoreConnection extends AbstractConnection implements Parse
         }
         catch (Throwable t)
         {
-            session.processError(t);
+            channel.processError(t);
         }
         finally
         {
@@ -356,7 +375,7 @@ public class WebSocketCoreConnection extends AbstractConnection implements Parse
         if (LOG.isDebugEnabled())
             LOG.debug("onOpen() {}",this);
 
-        session.onOpen();
+        channel.onOpen();
         super.onOpen();
     }
 
@@ -366,7 +385,7 @@ public class WebSocketCoreConnection extends AbstractConnection implements Parse
     @Override
     protected boolean onReadTimeout()
     {
-        session.processError(new SocketTimeoutException("Timeout on Read"));
+        channel.processError(new SocketTimeoutException("Timeout on Read"));
         return false;
     }
 
@@ -465,7 +484,7 @@ public class WebSocketCoreConnection extends AbstractConnection implements Parse
             return false;
         if (getClass() != obj.getClass())
             return false;
-        WebSocketCoreConnection other = (WebSocketCoreConnection) obj;
+        WebSocketConnection other = (WebSocketConnection) obj;
         EndPoint endp = getEndPoint();
         EndPoint otherEndp = other.getEndPoint();
         if (endp == null)
@@ -512,7 +531,7 @@ public class WebSocketCoreConnection extends AbstractConnection implements Parse
         public void onCompleteFailure(Throwable x)
         {
             super.onCompleteFailure(x);
-            session.processError(x);
+            channel.processError(x);
         }
     }
 }

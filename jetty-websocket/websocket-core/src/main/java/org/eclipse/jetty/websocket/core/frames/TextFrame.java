@@ -29,6 +29,11 @@ public class TextFrame extends DataFrame
     {
         super(OpCode.TEXT);
     }
+    
+    public TextFrame(TextFrame frame)
+    {
+        super(frame);
+    }
 
     @Override
     public Type getType()
@@ -48,7 +53,7 @@ public class TextFrame extends DataFrame
     {
         if (payload == null)
         {
-            return null;
+            return "";
         }
         return BufferUtil.toUTF8String(payload);
     }

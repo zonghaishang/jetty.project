@@ -18,20 +18,16 @@
 
 package org.eclipse.jetty.websocket.core.server;
 
-import java.io.IOException;
+import org.eclipse.jetty.io.ByteBufferPool;
+import org.eclipse.jetty.websocket.core.FrameHandler;
+import org.eclipse.jetty.websocket.core.NegotiateMessage;
+import org.eclipse.jetty.websocket.core.WebSocketPolicy;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
-public interface OpeningHandshake
+public interface FrameHandlerFactory
 {
-    /**
-     * Perform an Upgrade of a Request to WebSocket.
-     *
-     * @param request the received request
-     * @param response the pending response
-     * @return true if upgrade occurred
-     * @throws IOException
-     */
-    boolean upgrade(HttpServletRequest request, HttpServletResponse response) throws IOException;
+    FrameHandler newFrameHandler(
+            NegotiateMessage.Request negotiateRequest,
+            NegotiateMessage.Response negotiateResponse,
+            WebSocketPolicy candidatePolicy,
+            ByteBufferPool bufferPool);
 }
