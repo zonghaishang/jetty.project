@@ -34,8 +34,9 @@ import java.util.NoSuchElementException;
  * <li>Future HTTPbis ABNF changes for parsing will impact QuotedStringTokenizer</li>
  * </ul>
  * It was decided to keep this implementation separate for the above reasons.
- * @Deprecated use QuotedCSV
+ * @deprecated use and/or improve QuotedCSV 
  */
+@Deprecated
 public class QuoteUtil
 {
     private static class DeQuotingStringIterator implements Iterator<String>

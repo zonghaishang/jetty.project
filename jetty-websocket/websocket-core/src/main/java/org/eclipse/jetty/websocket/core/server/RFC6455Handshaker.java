@@ -46,7 +46,7 @@ import org.eclipse.jetty.websocket.core.FrameHandler;
 import org.eclipse.jetty.websocket.core.NegotiateMessage;
 import org.eclipse.jetty.websocket.core.WebSocketBehavior;
 import org.eclipse.jetty.websocket.core.WebSocketChannel;
-import org.eclipse.jetty.websocket.core.handshake.AcceptHash;
+import org.eclipse.jetty.websocket.core.server.AcceptHash;
 import org.eclipse.jetty.websocket.core.io.WebSocketConnection;
 
 public final class RFC6455Handshaker implements Handshaker
