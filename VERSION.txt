@@ -1,3 +1,5 @@
+jetty-9.4.9-SNAPSHOT
+
 jetty-9.4.8.v20171101 - 01 November 2017
  + 212 HttpClient to support pluggable AuthenticationStore.
  + 215 Consider native ALPN/SSL provider
