@@ -442,14 +442,10 @@ public class HttpClientTest extends AbstractHttpClientServerTest
                     .send();
             Assert.fail();
         }
-        catch (TimeoutException expected)
-        {
-        }
         catch (ExecutionException expected)
         {
             Assert.assertTrue(expected.getCause() instanceof TimeoutException);
         }
-
 
         // Make another request without specifying the idle timeout, should not fail
         ContentResponse response = client.newRequest(host, port)

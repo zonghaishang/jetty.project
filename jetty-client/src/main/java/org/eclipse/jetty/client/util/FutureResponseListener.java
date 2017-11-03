@@ -107,8 +107,6 @@ public class FutureResponseListener extends BufferingResponseListener implements
         boolean expired = !latch.await(timeout, unit);
         if (expired)
             throw new TimeoutException();
-        if (failure instanceof TimeoutException)
-            throw (TimeoutException)failure;
         return getResult();
     }
 

@@ -689,9 +689,6 @@ public class HttpClientTest extends AbstractHttpClientServerTest
                     .send();
             Assert.fail();
         }
-        catch (TimeoutException expected)
-        {
-        }
         catch (ExecutionException expected)
         {
             Assert.assertTrue(expected.getCause() instanceof TimeoutException);

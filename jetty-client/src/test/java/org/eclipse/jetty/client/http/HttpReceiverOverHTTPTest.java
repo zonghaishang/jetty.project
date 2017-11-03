@@ -180,9 +180,6 @@ public class HttpReceiverOverHTTPTest
             listener.get(5, TimeUnit.SECONDS);
             Assert.fail();
         }
-        catch (TimeoutException e)
-        {
-        }
         catch (ExecutionException e)
         {
             Assert.assertTrue(e.getCause() instanceof TimeoutException);
