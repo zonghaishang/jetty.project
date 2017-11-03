@@ -294,9 +294,7 @@ public abstract class HttpDestination extends ContainerLifeCycle implements Dest
         // timeout is set.        
         long expiresAtMs = NANOSECONDS.toMillis(nanoTime) + expiresInMs;
         long lastExpiresAtMs = nextTimeout.getAndUpdate(e->Math.min(e,expiresAtMs));
-        if (lastExpiresAtMs==Long.MAX_VALUE)
-            timeout.schedule(expiresInMs,MILLISECONDS);
-        else if (lastExpiresAtMs!=expiresAtMs)
+        if (lastExpiresAtMs!=expiresAtMs)
             timeout.reschedule(expiresInMs,MILLISECONDS);
     }
     

@@ -131,7 +131,10 @@ public class CyclicTimeoutTaskTest
     {
         Thread.sleep(1500);
         Assert.assertTrue(_expired);
-        Assert.assertFalse(_timeout.reschedule(1000,TimeUnit.MILLISECONDS));
+        _expired=false;
+        Assert.assertFalse(_timeout.reschedule(500,TimeUnit.MILLISECONDS));
+        Thread.sleep(1000);
+        Assert.assertTrue(_expired);
         _expired=false;
         _timeout.schedule(500,TimeUnit.MILLISECONDS);
         Thread.sleep(1000);

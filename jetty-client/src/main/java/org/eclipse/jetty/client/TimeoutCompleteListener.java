@@ -71,7 +71,7 @@ public class TimeoutCompleteListener extends CyclicTimeoutTask implements Respon
             LOG.debug("Scheduled timeout {} ms for {}", timeoutInMs, request);
         if (timeoutInMs>=0 && this.request.compareAndSet(null,request))
         {
-            schedule(timeoutInMs, TimeUnit.MILLISECONDS);
+            reschedule(timeoutInMs, TimeUnit.MILLISECONDS);
             return true;
         }
         

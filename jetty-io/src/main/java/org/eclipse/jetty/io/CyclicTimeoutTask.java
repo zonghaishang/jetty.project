@@ -53,7 +53,13 @@ public abstract class CyclicTimeoutTask
         return _scheduler;
     }
     
-    public void schedule(long delay, TimeUnit units)
+    /** 
+     * Schedule a timer.
+     * @param delay The period to delay before the timer expires.
+     * @param units The units of the delay period.
+     * @throws IllegalStateException Thrown if the timer is already set.
+     */
+    public void schedule(long delay, TimeUnit units) throws IllegalStateException
     {
         long now = System.nanoTime();
         long expireAtNanos = now + units.toNanos(delay);
@@ -66,6 +72,12 @@ public abstract class CyclicTimeoutTask
             _scheduled.compareAndSet(schedule,new Schedule(now,expireAtNanos,schedule));
     }
     
+    /** 
+     * Reschedule a timer, even if already set, cancelled or expired
+     * @param delay The period to delay before the timer expires.
+     * @param units The units of the delay period.
+     * @return True if the timer was already set.
+     */
     public boolean reschedule(long delay, TimeUnit units)
     {
         long now = System.nanoTime();
@@ -74,15 +86,12 @@ public abstract class CyclicTimeoutTask
         while(true)
         {
             long expireAt = _expireAtNanos.get();
-            if (expireAt==MAX_VALUE)
-                return false;
-
             if (_expireAtNanos.compareAndSet(expireAt,expireAtNanos))
             {
                 Schedule schedule = _scheduled.get();
                 if (schedule==null || schedule._scheduledAt>expireAtNanos)
                     _scheduled.compareAndSet(schedule,new Schedule(now,expireAtNanos,schedule));
-                return true;
+                return expireAt!=MAX_VALUE;
             }
         }
     }
