@@ -243,7 +243,7 @@ public class HttpClientTimeoutTest extends AbstractHttpClientServerTest
         }
     }
 
-    @Test
+    @Test(expected = TimeoutException.class)
     public void testIdleTimeout() throws Throwable
     {
         long timeout = 1000;
@@ -286,7 +286,7 @@ public class HttpClientTimeoutTest extends AbstractHttpClientServerTest
         catch (Exception x)
         {
             Assert.assertFalse(sslIdle.get());
-            Assert.assertThat(x.getCause(), Matchers.instanceOf(TimeoutException.class));
+            throw x;
         }
     }
 
